@@ -15,8 +15,9 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email.header import Header
 from email import encoders
-
+from configparser import RawConfigParser
 import os
+from Constants import Constants
 
 
 class EmailHelper(object):
@@ -30,30 +31,28 @@ class EmailHelper(object):
         return EmailHelper._instance
 
     def __init__(self):
-        # Todo:配置文件解析发件人、分解收件人list
+        cfg = RawConfigParser()
+        cfg.read('config.ini')
+        receivers = cfg.get('Email', 'receiveList')
+        self.receivers = receivers.split(';')  # 接收邮箱
+        self.sender = cfg.get('Email', 'sender')
+        self.pwd = cfg.get('Email', 'pwd')
+        self.server = cfg.get('Email', 'server')
 
-        pass
-
-    def sendEmail(self):
-        sender = 'algo@hczq.com'
-        receivers = ['wangzhaoyun@hcyjs.com']  # 接收邮件，可设置为你的QQ邮箱或者其他邮箱
-
+    def sendEmail(self, filePath,fileName,start,end):
         # 创建一个带附件的实例
         message = MIMEMultipart()
-        message['From'] = Header("菜鸟教程", 'utf-8')
-        message['To'] = Header("测试", 'utf-8')
-        subject = 'Python SMTP 邮件测试'
+        subject = f'{start}-{end}交易效果'
         message['Subject'] = Header(subject, 'utf-8')
 
         # 邮件正文内容
-        message.attach(MIMEText('这是Python 邮件发送测试……', 'plain', 'utf-8'))
+        message.attach(MIMEText(f'这是{start}-{end}交易效果,请查收', 'plain', 'utf-8'))
 
         # 构造附件1，传送当前目录下的 test.txt 文件
-        att1 = MIMEText(open(os.path.join('C:\\Users\\hc01\\Desktop', 'stocks.csv'), 'rb').read(),
-                        'base64', 'utf-8')
+        att1 = MIMEText(open(filePath, 'rb').read(), 'base64', 'utf-8')
         att1["Content-Type"] = 'application/octet-stream'
         # 这里的filename可以任意写，写什么名字，邮件中显示什么名字
-        att1["Content-Disposition"] = 'attachment; filename="stocks.csv"'
+        att1["Content-Disposition"] = f'attachment; filename="{fileName}"'
         message.attach(att1)
 
         # # 构造附件2，传送当前目录下的 runoob.txt 文件
@@ -64,9 +63,9 @@ class EmailHelper(object):
 
         try:
             smtpObj = smtplib.SMTP()
-            smtpObj.connect('smtp.exmail.qq.com')
-            smtpObj.login(sender, '63214677@HCZQ')
-            smtpObj.sendmail(sender, receivers, message.as_string())
+            smtpObj.connect(self.server)
+            smtpObj.login(self.sender, self.pwd)
+            smtpObj.sendmail(self.sender, self.receivers, message.as_string())
             print("邮件发送成功")
         except smtplib.SMTPException as e:
             print(e)
