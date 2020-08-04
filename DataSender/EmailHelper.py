@@ -39,9 +39,11 @@ class EmailHelper(object):
         self.pwd = cfg.get('Email', 'pwd')
         self.server = cfg.get('Email', 'server')
 
-    def sendEmail(self, filePath,fileName,start,end):
+    def sendEmail(self, filePath, fileName, start, end):
         # 创建一个带附件的实例
         message = MIMEMultipart()
+        # message['From'] = Header("交易效果:", 'utf-8')
+        # message['To'] = Header("交易效果:", 'utf-8')
         subject = f'{start}-{end}交易效果'
         message['Subject'] = Header(subject, 'utf-8')
 
