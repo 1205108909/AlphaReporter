@@ -61,11 +61,10 @@ class App(object):
             self.dfSummary = pd.concat([self.dfSummary, dfOneId])
 
         self.dfSummary = self.dfSummary[['Id', 'type', 'turnover', 'spread', 'Aggressive', 'Passive', 'UltraPassive']]
-        # if not os.path.exists(self.localOutputPath):
-        #     os.mkdir(self.localOutputPath)
-        # pathCsv = os.path.join(self.localOutputPath, 'SignalEffect_' + start + '_' + end + '.csv')
+        if not os.path.exists(self.localOutputPath):
+            os.mkdir(self.localOutputPath)
+        pathCsv = os.path.join(self.localOutputPath, 'SignalEffect_' + start + '_' + end + '.csv')
         fileName = 'SignalEffect_' + start + '_' + end + '.csv'
-        pathCsv = os.path.join('SignalEffect_' + start + '_' + end + '.csv')
         self.dfSummary.to_csv(pathCsv, encoding="utf_8_sig")
         self.email.sendEmail(pathCsv, fileName, start, end)
 
