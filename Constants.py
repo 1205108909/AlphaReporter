@@ -19,3 +19,5 @@ class Constants:
     PlacementCategoryDict = {0: 'Unknown', 1: 'Aggressive', 2: 'Passive', 3: 'UltraPassive', 4: 'ClientLimit'}
 
     IDwithChn = {'Cld_TRX_5001093': '泰铼投资', 'Cld_ZYZC%': '中意资产'}
+
+    SingalType2Chn = {'Close': '结束信号', 'First1': '同向首次信号', 'Forward': '同向信号', 'Reverse': '反向信号', 'Normal': "其他"}

@@ -47,20 +47,25 @@ class App(object):
 
         self.dfSummary = pd.DataFrame()
         for clientId in self.ClientIDs:
+            if len(clientId) == 0:
+                continue
             dfSignalEffect = self.signalEffect(start, end, clientId, 0)
             dfTurnoverRatio = self.calTurnOverRatio(start, end, clientId, 0)
             dfTurnoverRatio.columns = dfTurnoverRatio.columns.map(lambda x: Constants.PlacementCategoryDict[x])
             dfOneId = dfSignalEffect.merge(dfTurnoverRatio, left_on='type', right_on=dfTurnoverRatio.index, how='left')
-            self.dfSummary = pd.concat([self.dfSummary, dfOneId])
+            self.dfSummary = pd.concat([self.dfSummary, dfOneId], sort=True)
 
         for accountID in self.AccountIDs:
+            if len(accountID) == 0:
+                continue
             dfSignalEffect = self.signalEffect(start, end, accountID, 1)
             dfTurnoverRatio = self.calTurnOverRatio(start, end, accountID, 1)
             dfTurnoverRatio.columns = dfTurnoverRatio.columns.map(lambda x: Constants.PlacementCategoryDict[x])
             dfOneId = dfSignalEffect.merge(dfTurnoverRatio, left_on='type', right_on=dfTurnoverRatio.index, how='left')
-            self.dfSummary = pd.concat([self.dfSummary, dfOneId])
+            self.dfSummary = pd.concat([self.dfSummary, dfOneId], sort=True)
 
         self.dfSummary = self.dfSummary[['Id', 'type', 'turnover', 'spread', 'Aggressive', 'Passive', 'UltraPassive']]
+        self.dfSummary['type'] = self.dfSummary['type'].map(lambda x: Constants.SingalType2Chn[x])
         if not os.path.exists(self.localOutputPath):
             os.mkdir(self.localOutputPath)
         pathCsv = os.path.join(self.localOutputPath, 'SignalEffect_' + start + '_' + end + '.csv')
