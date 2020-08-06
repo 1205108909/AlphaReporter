@@ -15,6 +15,7 @@ import pymssql
 import Log
 import pandas as pd
 from Constants import Constants
+from DataSender.ExcelHelper import ExcelHelper
 
 # 显示所有列
 from DataSender.EmailHelper import EmailHelper
@@ -45,33 +46,49 @@ class App(object):
         self.localOutputPath = cfg.get('OutputPath', 'path')
         self.conn = None
 
-        self.dfSummary = pd.DataFrame()
+        if not os.path.exists(self.localOutputPath):
+            os.mkdir(self.localOutputPath)
+        pathCsv = os.path.join(self.localOutputPath, 'SignalEffect_' + start + '_' + end + '.xlsx')
+        fileName = 'SignalEffect_' + start + '_' + end + '.xlsx'
+        ExcelHelper.createExcel(pathCsv)
         for clientId in self.ClientIDs:
             if len(clientId) == 0:
                 continue
-            dfSignalEffect = self.signalEffect(start, end, clientId, 0)
-            dfTurnoverRatio = self.calTurnOverRatio(start, end, clientId, 0)
-            dfTurnoverRatio.columns = dfTurnoverRatio.columns.map(lambda x: Constants.PlacementCategoryDict[x])
-            dfOneId = dfSignalEffect.merge(dfTurnoverRatio, left_on='type', right_on=dfTurnoverRatio.index, how='left')
-            self.dfSummary = pd.concat([self.dfSummary, dfOneId], sort=True)
-
-        for accountID in self.AccountIDs:
-            if len(accountID) == 0:
+            self.calSignalEffect(clientId, pathCsv, end, start,0)
+        for accountId in self.AccountIDs:
+            if len(accountId) == 0:
                 continue
-            dfSignalEffect = self.signalEffect(start, end, accountID, 1)
-            dfTurnoverRatio = self.calTurnOverRatio(start, end, accountID, 1)
-            dfTurnoverRatio.columns = dfTurnoverRatio.columns.map(lambda x: Constants.PlacementCategoryDict[x])
-            dfOneId = dfSignalEffect.merge(dfTurnoverRatio, left_on='type', right_on=dfTurnoverRatio.index, how='left')
-            self.dfSummary = pd.concat([self.dfSummary, dfOneId], sort=True)
-
-        self.dfSummary = self.dfSummary[['Id', 'type', 'turnover', 'spread', 'Aggressive', 'Passive', 'UltraPassive']]
-        self.dfSummary['type'] = self.dfSummary['type'].map(lambda x: Constants.SingalType2Chn[x])
-        if not os.path.exists(self.localOutputPath):
-            os.mkdir(self.localOutputPath)
-        pathCsv = os.path.join(self.localOutputPath, 'SignalEffect_' + start + '_' + end + '.csv')
-        fileName = 'SignalEffect_' + start + '_' + end + '.csv'
-        self.dfSummary.to_csv(pathCsv, encoding="utf_8_sig")
+            self.calSignalEffect(accountId, pathCsv, end, start, 1)
+        ExcelHelper.removeSheet(pathCsv, 'Sheet')
         self.email.sendEmail(pathCsv, fileName, start, end)
+
+    def calSignalEffect(self, clientId, pathCsv, start, end, isclinet):
+        # 1.信号效果
+        dfSignalEffect = self._statSignalEffect(start, end, clientId, isclinet)
+        # 2.订单成交率
+        dfTurnoverRatio, dfTurnoverRatiowithQty = self._statTurnOverRatio(start, end, clientId, isclinet)
+        dfTurnoverRatio.columns = dfTurnoverRatio.columns.map(lambda x: Constants.PlacementCategoryDict[x])
+        dfTurnoverRatiowithQty['category'] = dfTurnoverRatiowithQty['category'].map(
+            lambda x: Constants.PlacementCategoryDict[x])
+        # 2.1 合并信号效果与订单成交率
+        dfSignalEffect = dfSignalEffect.merge(dfTurnoverRatio, left_on='type', right_on=dfTurnoverRatio.index,
+                                              how='left')
+        dfSignalEffect = dfSignalEffect[
+            ['Id', 'type', 'turnover', 'slipage', 'Aggressive', 'Passive', 'UltraPassive']]
+        dfSignalEffect['type'] = dfSignalEffect['type'].map(lambda x: Constants.SingalType2Chn[x])
+        # 3. passive/ultraPassive 比例
+        dfRatio = self._statRelativeRate(clientId, dfTurnoverRatiowithQty)
+        # 4.客户slipage排名
+        dfSlipageInBps = self._statSlipageInBps(start, end, clientId, isclinet)
+        dfSlipageInBpsWorse20 = dfSlipageInBps.head(20)
+        dfSlipageInBpsBetter20 = dfSlipageInBps.tail(20)
+        dfSlipageInBpsBetter20.sort_values(by='slipageInBps', axis=0, ascending=False, inplace=True)
+        dfSlipageInBpsBetter20 = dfSlipageInBpsBetter20.reset_index(drop=True)
+        ExcelHelper.Append_df_to_excel(pathCsv, dfSignalEffect, header=True, sheet_name=clientId)
+        ExcelHelper.Append_df_to_excel(pathCsv, dfRatio, header=True, interval=4, sheet_name=clientId)
+        ExcelHelper.Append_df_to_excel(pathCsv, dfSlipageInBpsWorse20, header=True, interval=4, sheet_name=clientId)
+        ExcelHelper.Append_df_to_excel(pathCsv, dfSlipageInBpsBetter20, header=True, interval=4,
+                                       sheet_name=clientId)
 
     def get_connection(self):
         for i in range(3):
@@ -81,7 +98,7 @@ class App(object):
             except pymssql.OperationalError as e:
                 print(e)
 
-    def signalEffect(self, start, end, Id, isClient):
+    def _statSignalEffect(self, start, end, Id, isClient):
         clientIds = []
         type = []
         turnover = []
@@ -96,11 +113,13 @@ class App(object):
                     turnover.append(row['turnover'])
                     spread.append(row['spread'])
 
-        df = pd.DataFrame({'Id': clientIds, 'type': type, 'turnover': turnover, 'spread': spread})
+        df = pd.DataFrame({'Id': clientIds, 'type': type, 'turnover': turnover, 'slipage': spread})
         return df
 
-    def calTurnOverRatio(self, start, end, clientId, isClient):
+    def _statTurnOverRatio(self, start, end, clientId, isClient):
         category = []
+        cumQty = []
+        orderQty = []
         signalType = []
         fillRatio = []
         with self.get_connection() as conn:
@@ -110,10 +129,63 @@ class App(object):
                 for row in cursor:
                     category.append(row['category'])
                     signalType.append(row['signalType'])
+                    cumQty.append([row['cumQty']])
+                    orderQty.append([row['Qty']])
                     fillRatio.append(row['fillRatio'])
 
-        df = pd.DataFrame({'category': category, 'signalType': signalType, 'fillRatio': fillRatio})
-        df = df.pivot(index='signalType', columns='category', values='fillRatio')
+        df = pd.DataFrame({'category': category, 'signalType': signalType, 'cumQty': cumQty, 'orderQty': orderQty,
+                           'fillRatio': fillRatio})
+        dfpivot = df.pivot(index='signalType', columns='category', values='fillRatio')
+        return dfpivot, df
+
+    def _statRelativeRate(self, id, df):
+        ids = []
+        type = []
+        normalRate = []
+        reveRate = []
+
+        ids.append(id)
+        type.append('passive/ultraPassive')
+        cumQtyNormalPassive = (df[(df['signalType'] == 'Normal') & (df['category'] == 'Passive')]['cumQty']).values[0][
+            0]
+        cumQtyNormalUltraPassive = \
+            (df[(df['signalType'] == 'Normal') & (df['category'] == 'UltraPassive')]['cumQty']).values[0][0]
+        normalRate.append(round(cumQtyNormalPassive / cumQtyNormalUltraPassive, 4))
+
+        cumQtyRevePassive = (df[(df['signalType'] == 'Reverse') & (df['category'] == 'Passive')]['cumQty']).values[0][0]
+        cumQtyReveUltraPassive = \
+            (df[(df['signalType'] == 'Reverse') & (df['category'] == 'UltraPassive')]['cumQty']).values[0][0]
+        reveRate.append(round(cumQtyRevePassive / cumQtyReveUltraPassive, 4))
+
+        df = pd.DataFrame({'id': ids, 'description': type, 'normalRate': normalRate, 'reverseRate': reveRate})
+
+        return df
+
+    def _statSlipageInBps(self, start, end, Id, isClient):
+        ids = []
+        symbol = []
+        side = []
+        orderQty = []
+        slipageInBps = []
+        effectiveTime = []
+        expireTime = []
+        idtype = "clientId" if isClient == 0 else "accountId"
+        with self.get_connection() as conn:
+            with conn.cursor(as_dict=True) as cursor:
+                sql = f"SELECT symbol,side, orderQty, slipageInBps, effectiveTime, expireTime FROM ClientOrderView WHERE {idtype} LIKE \'{Id}\' AND tradingDay >= \'{start}\' AND tradingDay <= \'{end}\' AND avgPrice * cumQty > 500000 ORDER BY slipageInBps"
+                cursor.execute(sql)
+                for row in cursor:
+                    ids.append(Id)
+                    symbol.append(row['symbol'])
+                    orderQty.append(row['orderQty'])
+                    side.append(row['side'])
+                    slipageInBps.append(row['slipageInBps'])
+                    effectiveTime.append(row['effectiveTime'])
+                    expireTime.append(row['expireTime'])
+
+        df = pd.DataFrame(
+            {'Id': ids, 'symbol': symbol, 'side': side, 'orderQty': orderQty, 'slipageInBps': slipageInBps,
+             'effectiveTime': effectiveTime, 'expireTime': expireTime})
         return df
 
 
