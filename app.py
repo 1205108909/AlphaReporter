@@ -54,7 +54,7 @@ class App(object):
         for clientId in self.ClientIDs:
             if len(clientId) == 0:
                 continue
-            self.calSignalEffect(clientId, pathCsv, end, start,0)
+            self.calSignalEffect(clientId, pathCsv, end, start, 0)
         for accountId in self.AccountIDs:
             if len(accountId) == 0:
                 continue
@@ -77,18 +77,29 @@ class App(object):
             ['Id', 'type', 'turnover', 'slipage', 'Aggressive', 'Passive', 'UltraPassive']]
         dfSignalEffect['type'] = dfSignalEffect['type'].map(lambda x: Constants.SingalType2Chn[x])
         # 3. passive/ultraPassive 比例
-        dfRatio = self._statRelativeRate(clientId, dfTurnoverRatiowithQty)
+        try:
+            dfRatio = self._statRelativeRate(clientId, dfTurnoverRatiowithQty)
+        except Exception as e:
+            dfRatio = None
+            self.Log.error(e)
+            self.Log.error('passive / ultraPassive比例')
+
         # 4.客户slipage排名
         dfSlipageInBps = self._statSlipageInBps(start, end, clientId, isclinet)
         dfSlipageInBpsWorse20 = dfSlipageInBps.head(20)
         dfSlipageInBpsBetter20 = dfSlipageInBps.tail(20)
         dfSlipageInBpsBetter20.sort_values(by='slipageInBps', axis=0, ascending=False, inplace=True)
         dfSlipageInBpsBetter20 = dfSlipageInBpsBetter20.reset_index(drop=True)
-        ExcelHelper.Append_df_to_excel(pathCsv, dfSignalEffect, header=True, sheet_name=clientId)
-        ExcelHelper.Append_df_to_excel(pathCsv, dfRatio, header=True, interval=4, sheet_name=clientId)
-        ExcelHelper.Append_df_to_excel(pathCsv, dfSlipageInBpsWorse20, header=True, interval=4, sheet_name=clientId)
-        ExcelHelper.Append_df_to_excel(pathCsv, dfSlipageInBpsBetter20, header=True, interval=4,
-                                       sheet_name=clientId)
+
+        if not dfSignalEffect is None:
+            ExcelHelper.Append_df_to_excel(pathCsv, dfSignalEffect, header=True, sheet_name=clientId)
+        if not dfRatio is None:
+            ExcelHelper.Append_df_to_excel(pathCsv, dfRatio, header=True, interval=4, sheet_name=clientId)
+        if not dfSlipageInBpsWorse20 is None:
+            ExcelHelper.Append_df_to_excel(pathCsv, dfSlipageInBpsWorse20, header=True, interval=4, sheet_name=clientId)
+        if not dfSlipageInBpsBetter20 is None:
+            ExcelHelper.Append_df_to_excel(pathCsv, dfSlipageInBpsBetter20, header=True, interval=4,
+                                           sheet_name=clientId)
 
     def get_connection(self):
         for i in range(3):
