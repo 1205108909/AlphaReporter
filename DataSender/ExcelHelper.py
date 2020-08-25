@@ -28,11 +28,11 @@ class ExcelHelper(object):
         writer = pd.ExcelWriter(filename, engine='openpyxl')
 
         try:
-            if not sheet_name in cls._dictSheetStartrow.keys():
-                cls._dictSheetStartrow[sheet_name] = 0
+            if not filename in cls._dictSheetStartrow.keys():
+                cls._dictSheetStartrow[filename] = 0
 
-            if not sheet_name in cls._dictSheetLastdfShape.keys():
-                cls._dictSheetLastdfShape[sheet_name] = 0
+            if not filename in cls._dictSheetLastdfShape.keys():
+                cls._dictSheetLastdfShape[filename] = 0
 
             writer.book = openpyxl.load_workbook(filename)
 
@@ -47,10 +47,10 @@ class ExcelHelper(object):
 
             # copy existing sheets
             writer.sheets = {ws.title: ws for ws in writer.book.worksheets}
-            # if sheet_name in writer.book.sheetnames:
-            cls._dictSheetStartrow[sheet_name] += cls._dictSheetLastdfShape[sheet_name] + interval
-            df.to_excel(writer, sheet_name, startrow=cls._dictSheetStartrow[sheet_name], index=False, **to_excel_kwargs)
-            cls._dictSheetLastdfShape[sheet_name] = df.shape[0]
+            cls._dictSheetStartrow[filename] += cls._dictSheetLastdfShape[filename] + interval
+            df.to_excel(writer, sheet_name, startrow=cls._dictSheetStartrow[filename], index=False, **to_excel_kwargs)
+            cls._dictSheetLastdfShape[filename] = df.shape[0]
+            writer.close()
 
         except Exception as e:
             print(f'Append_df_to_excel is Fail')

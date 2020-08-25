@@ -5,6 +5,7 @@ import sys
 import Log
 import os
 import numpy as np
+from configparser import RawConfigParser
 
 from DataSender.ExcelHelper import ExcelHelper
 from DataService.JYDataLoader import JYDataLoader
@@ -169,13 +170,13 @@ class AlgoTradeReporter(object):
         def cal_twap(tradingDay, effectiveTime, expireTime, symbol, price, side):
             effectiveTime = effectiveTime.hour * 10000000 + effectiveTime.minute * 100000 + effectiveTime.second * 1000
             expireTime = expireTime.hour * 10000000 + expireTime.minute * 100000 + expireTime.second * 1000
-            print(f'{tradingDay}-{effectiveTime}-{expireTime}-{symbol}-{price}-{side}')
+            self.logger.info(f'{tradingDay}-{effectiveTime}-{expireTime}-{symbol}-{price}-{side}')
             twap = self.getTWAP(tradingDay, symbol, effectiveTime, expireTime, price, side)
             return twap
 
         def cal_twap_slipage(twap, side, avgprice):
             avgprice = np.float64(avgprice)
-            slipageByTwap = (avgprice - twap) / twap if side == 'Sell' else (twap - avgprice) / twap
+            slipageByTwap = 0.00 if twap == 0.00 else ((avgprice - twap) / twap if side == 'Sell' else (twap - avgprice) / twap)
             return slipageByTwap
 
         for tradingDay in tradingDays:
@@ -194,7 +195,7 @@ class AlgoTradeReporter(object):
                     # 2.计算slipageByTwap
                     clientOrders['slipageByTwap'] = clientOrders.apply(
                         lambda x: cal_twap_slipage(x['twap'], x['side'], x['avgprice']), axis=1)
-
+                    clientOrders.loc[clientOrders.loc[:, 'cumQty'] == 0, ['slipageByTwap']] = 0.00
                     clientOrders['twap'] = round(clientOrders['twap'], 5)
                     clientOrders['slipageByTwap'] = round(clientOrders['slipageByTwap'] * 10000, 2)
 
@@ -231,14 +232,15 @@ class AlgoTradeReporter(object):
                                                    header=True, sheet_name=clientId)
                     ExcelHelper.Append_df_to_excel(pathCsv, df_summary, header=True,
                                                    interval=4, sheet_name=clientId)
-                    # ExcelHelper.removeSheet(pathCsv, 'Sheet')
+                    ExcelHelper.removeSheet(pathCsv, 'Sheet')
                     self.email.send_email_file(pathCsv, fileName, df_receive)
                     self.logger.info(f'calculator: {tradingDay}__{clientId} successfully')
 
 
 if __name__ == '__main__':
+    cfg = RawConfigParser()
+    cfg.read('config.ini')
+    clientIds = cfg.get('AlgoTradeReport', 'id')
     start = sys.argv[1]
     end = sys.argv[2]
-    clientIds = 'Cld_TRX_5001093'
-
     reporter = AlgoTradeReporter(start, end, clientIds)
