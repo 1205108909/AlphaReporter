@@ -95,7 +95,7 @@ class AlgoTradeReporter(object):
         data = pd.DataFrame({'symbol': symbol, 'side': side, 'effectiveTime': effectiveTime, 'expireTime': expireTime,
                              'avgprice': avgprice, 'cumQty': cumQty, 'slipageByVwap': slipageByVwap, 'price': price})
 
-        data['cumQty'] = data['avgprice'].astype('int')
+        data['cumQty'] = data['cumQty'].astype('int')
         data['avgprice'] = data['avgprice'].astype('float')
         data['slipageByVwap'] = data['slipageByVwap'].astype('float')
         data['turnover'] = data['avgprice'] * data['cumQty']
@@ -184,7 +184,7 @@ class AlgoTradeReporter(object):
                 self.email.add_email_content(f'{tradingDay}_({clientId})交易报告，请查收')
 
                 clientOrders = self.get_clientOrder(tradingDay, clientId)
-                clientOrders.sort_values(by=['symbol'], inplace=True)
+                clientOrders.sort_values(by=['effectiveTime'], inplace=True)
                 if clientOrders.size > 0:
                     # 1.计算twap
                     clientOrders['twap'] = clientOrders.apply(
@@ -231,7 +231,7 @@ class AlgoTradeReporter(object):
                                                    header=True, sheet_name=clientId)
                     ExcelHelper.Append_df_to_excel(pathCsv, df_summary, header=True,
                                                    interval=4, sheet_name=clientId)
-                    ExcelHelper.removeSheet(pathCsv, 'Sheet')
+                    # ExcelHelper.removeSheet(pathCsv, 'Sheet')
                     self.email.send_email_file(pathCsv, fileName, df_receive)
                     self.logger.info(f'calculator: {tradingDay}__{clientId} successfully')
 

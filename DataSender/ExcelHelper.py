@@ -47,7 +47,6 @@ class ExcelHelper(object):
 
             # copy existing sheets
             writer.sheets = {ws.title: ws for ws in writer.book.worksheets}
-
             # if sheet_name in writer.book.sheetnames:
             cls._dictSheetStartrow[sheet_name] += cls._dictSheetLastdfShape[sheet_name] + interval
             df.to_excel(writer, sheet_name, startrow=cls._dictSheetStartrow[sheet_name], index=False, **to_excel_kwargs)
