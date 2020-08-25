@@ -29,7 +29,7 @@ class App(object):
 
     def __init__(self, start, end):
         self.Log = Log.get_logger(__name__)
-        self.email = EmailHelper()
+        self.email = EmailHelper.instance()
 
         cfg = RawConfigParser()
         cfg.read('config.ini')
