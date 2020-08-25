@@ -176,7 +176,8 @@ class AlgoTradeReporter(object):
 
         def cal_twap_slipage(twap, side, avgprice):
             avgprice = np.float64(avgprice)
-            slipageByTwap = 0.00 if twap == 0.00 else ((avgprice - twap) / twap if side == 'Sell' else (twap - avgprice) / twap)
+            slipageByTwap = 0.00 if twap == 0.00 else (
+                (avgprice - twap) / twap if side == 'Sell' else (twap - avgprice) / twap)
             return slipageByTwap
 
         for tradingDay in tradingDays:
