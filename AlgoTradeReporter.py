@@ -181,6 +181,9 @@ class AlgoTradeReporter(object):
             return slipageByTwap
 
         for tradingDay in tradingDays:
+            if not os.path.exists(os.path.join(self.tick_path, tradingDay + '.h5')):
+                self.logger.error(f'{tradingDay} h5 tick is not existed.')
+                continue
             for clientId in clientIds:
                 self.logger.info(f'start calculator: {tradingDay}__{clientId}')
                 self.email.add_email_content(f'{tradingDay}_({clientId})交易报告，请查收')
