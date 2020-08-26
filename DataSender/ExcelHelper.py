@@ -21,20 +21,21 @@ class ExcelHelper(object):
         wb.save(path)
 
     @classmethod
-    def Append_df_to_excel(cls, filename, df, sheet_name, interval=0,
+    def Append_df_to_excel(cls, df, file_name, sheet_name, interval=0, sep_key='file_name',
                            truncate_sheet=False,
                            **to_excel_kwargs):
 
-        writer = pd.ExcelWriter(filename, engine='openpyxl')
+        key = file_name if sep_key == 'file_name' else sheet_name
+        writer = pd.ExcelWriter(file_name, engine='openpyxl')
 
         try:
-            if not filename in cls._dictSheetStartrow.keys():
-                cls._dictSheetStartrow[filename] = 0
+            if not key in cls._dictSheetStartrow.keys():
+                cls._dictSheetStartrow[key] = 0
 
-            if not filename in cls._dictSheetLastdfShape.keys():
-                cls._dictSheetLastdfShape[filename] = 0
+            if not key in cls._dictSheetLastdfShape.keys():
+                cls._dictSheetLastdfShape[key] = 0
 
-            writer.book = openpyxl.load_workbook(filename)
+            writer.book = openpyxl.load_workbook(file_name)
 
             # truncate sheet
             if truncate_sheet and sheet_name in writer.book.sheetnames:
@@ -47,9 +48,9 @@ class ExcelHelper(object):
 
             # copy existing sheets
             writer.sheets = {ws.title: ws for ws in writer.book.worksheets}
-            cls._dictSheetStartrow[filename] += cls._dictSheetLastdfShape[filename] + interval
-            df.to_excel(writer, sheet_name, startrow=cls._dictSheetStartrow[filename], index=False, **to_excel_kwargs)
-            cls._dictSheetLastdfShape[filename] = df.shape[0]
+            cls._dictSheetStartrow[key] += cls._dictSheetLastdfShape[key] + interval
+            df.to_excel(writer, sheet_name, startrow=cls._dictSheetStartrow[key], index=False, **to_excel_kwargs)
+            cls._dictSheetLastdfShape[key] = df.shape[0]
             writer.close()
 
         except Exception as e:

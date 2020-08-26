@@ -92,14 +92,17 @@ class App(object):
         dfSlipageInBpsBetter20 = dfSlipageInBpsBetter20.reset_index(drop=True)
 
         if not dfSignalEffect is None:
-            ExcelHelper.Append_df_to_excel(pathCsv, dfSignalEffect, header=True, sheet_name=clientId)
+            ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=dfSignalEffect, header=True, sheet_name=clientId,
+                                           sep_key='sheet_name')
         if not dfRatio is None:
-            ExcelHelper.Append_df_to_excel(pathCsv, dfRatio, header=True, interval=4, sheet_name=clientId)
+            ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=dfRatio, header=True, interval=4, sheet_name=clientId,
+                                           sep_key='sheet_name')
         if not dfSlipageInBpsWorse20 is None:
-            ExcelHelper.Append_df_to_excel(pathCsv, dfSlipageInBpsWorse20, header=True, interval=4, sheet_name=clientId)
+            ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=dfSlipageInBpsWorse20, header=True, interval=4,
+                                           sheet_name=clientId, sep_key='sheet_name')
         if not dfSlipageInBpsBetter20 is None:
-            ExcelHelper.Append_df_to_excel(pathCsv, dfSlipageInBpsBetter20, header=True, interval=4,
-                                           sheet_name=clientId)
+            ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=dfSlipageInBpsBetter20, header=True, interval=4,
+                                           sheet_name=clientId, sep_key='sheet_name')
 
     def get_connection(self):
         for i in range(3):

@@ -232,9 +232,9 @@ class AlgoTradeReporter(object):
                     pathCsv = os.path.join(f'Data/{fileName}')
 
                     ExcelHelper.createExcel(pathCsv)
-                    ExcelHelper.Append_df_to_excel(pathCsv, clientOrders,
+                    ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=clientOrders,
                                                    header=True, sheet_name=clientId)
-                    ExcelHelper.Append_df_to_excel(pathCsv, df_summary, header=True,
+                    ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=df_summary, header=True,
                                                    interval=4, sheet_name=clientId)
                     ExcelHelper.removeSheet(pathCsv, 'Sheet')
                     self.email.send_email_file(pathCsv, fileName, df_receive)
