@@ -71,11 +71,12 @@ class App(object):
         dfTurnoverRatiowithQty['category'] = dfTurnoverRatiowithQty['category'].map(
             lambda x: Constants.PlacementCategoryDict[x])
         # 2.1 合并信号效果与订单成交率
-        dfSignalEffect = dfSignalEffect.merge(dfTurnoverRatio, left_on='type', right_on=dfTurnoverRatio.index,
-                                              how='left')
-        dfSignalEffect = dfSignalEffect[
-            ['Id', 'type', 'turnover', 'slipage', 'Aggressive', 'Passive', 'UltraPassive']]
-        dfSignalEffect['type'] = dfSignalEffect['type'].map(lambda x: Constants.SingalType2Chn[x])
+        if dfSignalEffect.shape[0] > 0:
+            dfSignalEffect = dfSignalEffect.merge(dfTurnoverRatio, left_on='type', right_on=dfTurnoverRatio.index,
+                                                  how='left')
+            dfSignalEffect = dfSignalEffect[
+                ['Id', 'type', 'turnover', 'slipage', 'Aggressive', 'Passive', 'UltraPassive']]
+            dfSignalEffect['type'] = dfSignalEffect['type'].map(lambda x: Constants.SingalType2Chn[x])
         # 3. passive/ultraPassive 比例
         try:
             dfRatio = self._statRelativeRate(clientId, dfTurnoverRatiowithQty)
@@ -113,22 +114,27 @@ class App(object):
                 print(e)
 
     def _statSignalEffect(self, start, end, Id, isClient):
-        clientIds = []
-        type = []
-        turnover = []
-        spread = []
-        with self.get_connection() as conn:
-            with conn.cursor(as_dict=True) as cursor:
-                proc = 'spu_SignalEffect'
-                cursor.callproc(proc, (Id, start, end, isClient))
-                for row in cursor:
-                    clientIds.append(Id)
-                    type.append(row['signalType'])
-                    turnover.append(row['turnover'])
-                    spread.append(row['spread'])
+        try:
+            clientIds = []
+            type = []
+            turnover = []
+            spread = []
+            with self.get_connection() as conn:
+                with conn.cursor(as_dict=True) as cursor:
+                    proc = 'spu_SignalEffect'
+                    cursor.callproc(proc, (Id, start, end, isClient))
+                    for row in cursor:
+                        clientIds.append(Id)
+                        type.append(row['signalType'])
+                        turnover.append(row['turnover'])
+                        spread.append(row['spread'])
 
-        df = pd.DataFrame({'Id': clientIds, 'type': type, 'turnover': turnover, 'slipage': spread})
-        return df
+            df = pd.DataFrame({'Id': clientIds, 'type': type, 'turnover': turnover, 'slipage': spread})
+            return df
+
+        except Exception as e:
+            self.Log.error(e)
+            return pd.DataFrame()
 
     def _statTurnOverRatio(self, start, end, clientId, isClient):
         category = []
@@ -153,27 +159,33 @@ class App(object):
         return dfpivot, df
 
     def _statRelativeRate(self, id, df):
-        ids = []
-        type = []
-        normalRate = []
-        reveRate = []
+        try:
+            ids = []
+            type = []
+            normalRate = []
+            reveRate = []
 
-        ids.append(id)
-        type.append('passive/ultraPassive')
-        cumQtyNormalPassive = (df[(df['signalType'] == 'Normal') & (df['category'] == 'Passive')]['cumQty']).values[0][
-            0]
-        cumQtyNormalUltraPassive = \
-            (df[(df['signalType'] == 'Normal') & (df['category'] == 'UltraPassive')]['cumQty']).values[0][0]
-        normalRate.append(round(cumQtyNormalPassive / cumQtyNormalUltraPassive, 4))
+            ids.append(id)
+            type.append('passive/ultraPassive')
+            cumQtyNormalPassive = \
+                (df[(df['signalType'] == 'Normal') & (df['category'] == 'Passive')]['cumQty']).values[0][
+                    0]
+            cumQtyNormalUltraPassive = \
+                (df[(df['signalType'] == 'Normal') & (df['category'] == 'UltraPassive')]['cumQty']).values[0][0]
+            normalRate.append(round(cumQtyNormalPassive / cumQtyNormalUltraPassive, 4))
 
-        cumQtyRevePassive = (df[(df['signalType'] == 'Reverse') & (df['category'] == 'Passive')]['cumQty']).values[0][0]
-        cumQtyReveUltraPassive = \
-            (df[(df['signalType'] == 'Reverse') & (df['category'] == 'UltraPassive')]['cumQty']).values[0][0]
-        reveRate.append(round(cumQtyRevePassive / cumQtyReveUltraPassive, 4))
+            cumQtyRevePassive = \
+                (df[(df['signalType'] == 'Reverse') & (df['category'] == 'Passive')]['cumQty']).values[0][0]
+            cumQtyReveUltraPassive = \
+                (df[(df['signalType'] == 'Reverse') & (df['category'] == 'UltraPassive')]['cumQty']).values[0][0]
+            reveRate.append(round(cumQtyRevePassive / cumQtyReveUltraPassive, 4))
 
-        df = pd.DataFrame({'id': ids, 'description': type, 'normalRate': normalRate, 'reverseRate': reveRate})
+            df = pd.DataFrame({'id': ids, 'description': type, 'normalRate': normalRate, 'reverseRate': reveRate})
 
-        return df
+            return df
+        except Exception as e:
+            self.Log.error(e)
+            return pd.DataFrame()
 
     def _statSlipageInBps(self, start, end, Id, isClient):
         ids = []
