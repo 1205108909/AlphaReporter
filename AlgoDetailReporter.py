@@ -500,7 +500,7 @@ class AlgoDetailReporter(object):
 
                 df_receive = self.get_receiveList(clientId)
                 df_receive['tradingDay'] = tradingDay
-                fileName = f'{tradingDay}_({clientId}).xlsx'
+                fileName = f'{tradingDay}_({clientId})_AlgoDetailReporter.xlsx'
                 pathCsv = os.path.join(f'Data/{fileName}')
 
                 ExcelHelper.createExcel(pathCsv)
@@ -527,7 +527,7 @@ class AlgoDetailReporter(object):
                                                interval=3, sheet_name=clientId)
 
                 ExcelHelper.removeSheet(pathCsv, 'Sheet')
-                # self.email.send_email_file(pathCsv, fileName, df_receive)
+                self.email.send_email_file(pathCsv, fileName, df_receive)
                 self.logger.info(f'calculator: {tradingDay}__{clientId} successfully')
 
 
