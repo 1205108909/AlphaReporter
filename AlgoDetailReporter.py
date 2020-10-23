@@ -30,7 +30,6 @@ pd.set_option('display.max_rows', None)
 class AlgoDetailReporter(object):
     def __init__(self, tradingDay, clientIds):
         self.logger = Log.get_logger(__name__)
-        self.tick_path = "Y:/Data/h5data/stock/tick/"
         self.server = "172.10.10.7"
         self.database = "AlgoTradeReport"
         self.user = "algodb"
