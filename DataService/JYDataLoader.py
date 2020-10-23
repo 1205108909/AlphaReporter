@@ -108,7 +108,7 @@ class JYDataLoader:
         except Exception as e:
             raise Exception("%s get_tradingday Fail")
             print(e)
-            return pd.DataFrame()
+            return []
 
     def getLastDay(self, date, start, end):
         tradingDays = self.get_tradingday(start, end)

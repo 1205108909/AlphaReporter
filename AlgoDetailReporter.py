@@ -28,7 +28,7 @@ pd.set_option('display.max_rows', None)
 
 
 class AlgoDetailReporter(object):
-    def __init__(self, start, end, clientIds):
+    def __init__(self, tradingDay, clientIds):
         self.logger = Log.get_logger(__name__)
         self.tick_path = "Y:/Data/h5data/stock/tick/"
         self.server = "172.10.10.7"
@@ -38,7 +38,7 @@ class AlgoDetailReporter(object):
         self.conn = None
 
         jyloader = JYDataLoader()
-        tradingdays = jyloader.get_tradingday(start, end)
+        tradingdays = jyloader.get_tradingday(tradingDay, tradingDay)
         clientIDs = list(clientIds.split(';'))
         self.email = EmailHelper.instance()
 
@@ -198,52 +198,6 @@ class AlgoDetailReporter(object):
         data['turnover'] = data['avgprice'] * data['cumQty']
         return data
 
-    def read_symbol_tick(self, tradingday, symbol):
-        with h5py.File(os.path.join(self.tick_path + tradingday + ".h5"), 'r') as h5file:
-            if symbol in h5file.keys():
-                df_tick_symbol = pd.DataFrame({'Time': h5file[symbol]['Time'][:],
-                                               'Price': h5file[symbol]['Price'][:],
-                                               'AccTurnover': h5file[symbol]['AccTurnover'][:],
-                                               'AccVolume': h5file[symbol]['AccVolume'][:],
-                                               'Volume': h5file[symbol]['Volume'][:],
-                                               'BSFlag': h5file[symbol]['BSFlag'][:],
-                                               'BidAvgPrice': h5file[symbol]['BidAvgPrice'][:],
-                                               'High': h5file[symbol]['High'][:],
-                                               'Low': h5file[symbol]['Low'][:],
-                                               'MatchItem': h5file[symbol]['MatchItem'][:],
-                                               'Open': h5file[symbol]['Open'][:],
-                                               'PreClose': h5file[symbol]['PreClose'][:],
-                                               'TotalAskVolume': h5file[symbol]['TotalAskVolume'][:],
-                                               'TotalBidVolume': h5file[symbol]['TotalBidVolume'][:],
-                                               'Turnover': h5file[symbol]['Turnover'][:],
-                                               'AskAvgPrice': h5file[symbol]['AskAvgPrice'][:]})
-                return df_tick_symbol
-            else:
-                self.logger.warn("there is no TickData (" + symbol + ") in h5 file, please check your data")
-                return pd.DataFrame()
-
-    def getTickDataBySymbol(self, tradingDay, symbol, startTime=90000000, endTime=160000000, price=0, side='Buy'):
-        df_tick_symbol = self.read_symbol_tick(tradingDay, symbol)
-        if price == 0:
-            return df_tick_symbol[(df_tick_symbol['Time'] >= startTime) & (df_tick_symbol['Time'] <= endTime) & (
-                    df_tick_symbol['Volume'] > 0)]
-        else:
-            if side == 'Buy' or side == 1:
-                return df_tick_symbol[
-                    (df_tick_symbol['Time'] >= startTime) & (df_tick_symbol['Time'] <= endTime) & (
-                            df_tick_symbol['Volume'] > 0) & (df_tick_symbol['Price'] <= price)]
-            else:
-                return df_tick_symbol[
-                    (df_tick_symbol['Time'] >= startTime) & (df_tick_symbol['Time'] <= endTime) & (
-                            df_tick_symbol['Volume'] > 0) & (df_tick_symbol['Price'] >= price)]
-
-    def getTWAP(self, tradingDay, symbol, startTime=90000000, endTime=160000000, price=0, side='Buy'):
-        data = self.getTickDataBySymbol(tradingDay, symbol, startTime, endTime, price, side)
-        if data.size > 0:
-            return data.Price.sum() / data.Volume.count()
-        else:
-            return 0
-
     def join_client_exchange_Order(self, tradingDay, clientId):
         symbol = []
         effectiveTime = []
@@ -344,9 +298,6 @@ class AlgoDetailReporter(object):
 
     def run(self, tradingDays, clientIds):
         for tradingDay in tradingDays:
-            if not os.path.exists(os.path.join(self.tick_path, tradingDay + '.h5')):
-                self.logger.error(f'{tradingDay} h5 tick is not existed.')
-                continue
             for clientId in clientIds:
                 self.logger.info(f'start calculator: {tradingDay}__{clientId}')
                 self.email.add_email_content(f'{tradingDay}_({clientId})统计报告，请查收')
@@ -534,7 +485,6 @@ class AlgoDetailReporter(object):
 if __name__ == '__main__':
     cfg = RawConfigParser()
     cfg.read('config.ini')
-    clientIds = cfg.get('ClientID', 'id')
-    start = sys.argv[1]
-    end = sys.argv[2]
-    reporter = AlgoDetailReporter(start, end, clientIds)
+    clientIds = cfg.get('AlgoDetailReport', 'id')
+    tradingDay = sys.argv[1]
+    reporter = AlgoDetailReporter(tradingDay, clientIds)

@@ -81,7 +81,7 @@ class AlgoTradeReporter(object):
         price = []
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
-                stmt = f"select * from ClientOrderView where orderQty>0 and (securityType='RPO' or securityType='EQA') and tradingDay = \'{tradingday}\' and clientId = \'{clientId}\'"
+                stmt = f"select * from ClientOrderView where orderQty>0 and (securityType='RPO' or securityType='EQA') and tradingDay = \'{tradingday}\' and clientId like \'{clientId}\'"
                 cursor.execute(stmt)
                 for row in cursor:
                     symbol.append(row['symbol'])
@@ -205,7 +205,9 @@ class AlgoTradeReporter(object):
 
                     # 3.cancel_ratio 计算撤单率
                     df_cancel_ratio = self.cal_cancel_ratio(tradingDay, clientId)
-                    cancel_ratio = sum(df_cancel_ratio[df_cancel_ratio['orderStatus'] == 'Canceled']['Qty']) / sum(
+                    cancel_ratio = 0 if sum(
+                        df_cancel_ratio[df_cancel_ratio['orderStatus'] != 'Rejected']['Qty']) == 0 else sum(
+                        df_cancel_ratio[df_cancel_ratio['orderStatus'] == 'Canceled']['Qty']) / sum(
                         df_cancel_ratio[df_cancel_ratio['orderStatus'] != 'Rejected']['Qty'])
                     cancel_ratio = round(np.float64(cancel_ratio) * 100, 2)
 
@@ -213,10 +215,12 @@ class AlgoTradeReporter(object):
                     turnover = sum(clientOrders['turnover'])
 
                     # 5.计算VwapBySlipage
-                    slipage_by_vwap = sum(clientOrders['turnover'] * clientOrders['slipageByVwap']) / sum(
+                    slipage_by_vwap = 0 if sum(clientOrders['turnover']) == 0 else sum(
+                        clientOrders['turnover'] * clientOrders['slipageByVwap']) / sum(
                         clientOrders['turnover'])
                     # 6.计算TwapBySlipage
-                    slipage_by_twap = sum(clientOrders['turnover'] * clientOrders['slipageByTwap']) / sum(
+                    slipage_by_twap = 0 if sum(clientOrders['turnover']) == 0 else sum(
+                        clientOrders['turnover'] * clientOrders['slipageByTwap']) / sum(
                         clientOrders['turnover'])
 
                     df_summary = pd.DataFrame(
@@ -228,7 +232,7 @@ class AlgoTradeReporter(object):
                     # if df_receive.shape[0] > 0:
                     #     receivers = df_receive.loc[0, 'repsentEmail'].split(';')
 
-                    fileName = f'{tradingDay}_({clientId}).xlsx'
+                    fileName = f'{tradingDay}_({clientId})_AlgoTradeReporter.xlsx'
                     pathCsv = os.path.join(f'Data/{fileName}')
 
                     ExcelHelper.createExcel(pathCsv)
