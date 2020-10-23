@@ -232,6 +232,8 @@ class AlgoTradeReporter(object):
                     pathCsv = os.path.join(f'Data/{fileName}')
 
                     ExcelHelper.createExcel(pathCsv)
+                    clientOrders['effectiveTime'] = clientOrders['effectiveTime'].map(lambda x: x.strftime('%H:%M:%S'))
+                    clientOrders['expireTime'] = clientOrders['expireTime'].map(lambda x: x.strftime('%H:%M:%S'))
                     ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=clientOrders,
                                                    header=True, sheet_name=clientId)
                     ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=df_summary, header=True,
