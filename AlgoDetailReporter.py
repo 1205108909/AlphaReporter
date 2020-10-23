@@ -308,6 +308,8 @@ class AlgoDetailReporter(object):
                     all_clientOrders['slipageByVwap'] * all_clientOrders['turnover']) / sum(
                     all_clientOrders['turnover']), 2)
 
+
+                #表1
                 df_total_effect = pd.DataFrame(
                     {'clientId': clientId, '订单数': total_trade_num, '成交额(万元)': total_turnover,
                      '交易效果(bps)': total_slipage}, index=[1])
@@ -342,8 +344,8 @@ class AlgoDetailReporter(object):
                     all_clientOrders_sz['slipageByVwap'] * all_clientOrders_sz['turnover']) / sum(
                     all_clientOrders_sz['turnover']), 2))
 
-                list_sh.append(sum(all_has_signal_clientOrders_sh['turnover']))
-                list_sz.append(sum(all_has_signal_clientOrders_sz['turnover']))
+                list_sh.append(round(sum(all_has_signal_clientOrders_sh['turnover']) / 10000, 2))
+                list_sz.append(round(sum(all_has_signal_clientOrders_sz['turnover']) / 10000, 2))
                 list_sh.append(0 if sum(
                     all_has_signal_clientOrders_sh['turnover']) == 0 else round(sum(
                     all_has_signal_clientOrders_sh['slipageByVwap'] * all_has_signal_clientOrders_sh['turnover']) / sum(
@@ -410,6 +412,7 @@ class AlgoDetailReporter(object):
                     df_client_exchange_order_sz_first1['slipageByVwap'] * df_client_exchange_order_sz_first1[
                         'turnover']) / sum(df_client_exchange_order_sz_first1['turnover']) * 10000, 2))
 
+                # 表2
                 list_summary = ['交易额(万元)', '订单数', '交易效果', '信号交易额(万元)', '信号交易效果', '非信号交易额(万元)', '非信号交易效果',
                                 '同向信号交易效果', '反向信号交易效果', '同向首次信号交易效果']
                 df_market_effect = pd.DataFrame({'指标': list_summary, 'SZ': list_sz, 'SH': list_sh})
@@ -477,7 +480,7 @@ class AlgoDetailReporter(object):
                                                interval=3, sheet_name=clientId)
 
                 ExcelHelper.removeSheet(pathCsv, 'Sheet')
-                self.email.send_email_file(pathCsv, fileName, df_receive)
+                # self.email.send_email_file(pathCsv, fileName, df_receive)
                 self.logger.info(f'calculator: {tradingDay}__{clientId} successfully')
 
 
