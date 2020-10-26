@@ -4,14 +4,14 @@
 """
 @Author : wangzhaoyun
 @Contact:1205108909@qq.com
-@File : AlgoDetailReporter.py 
-@Time : 2020/10/22 20:02 
+@File : AlgoSignalReporter.py 
+@Time : 2020/10/26 11:27 
 """
 
 import os
 import sys
 from configparser import RawConfigParser
-
+from Constants import Constants
 import h5py
 import pandas as pd
 import pymssql
@@ -27,8 +27,10 @@ pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
 
 
-class AlgoDetailReporter(object):
-    def __init__(self, tradingDay, clientIds):
+class AlgoSignalReporter(object):
+    dict_id_clientName = {'Cld_TRX_5001008': '富善投资', 'Cld_TRX_5001093': '泰铼投资'}
+
+    def __init__(self, tradingDay):
         self.logger = Log.get_logger(__name__)
         self.server = "172.10.10.7"
         self.database = "AlgoTradeReport"
@@ -38,9 +40,20 @@ class AlgoDetailReporter(object):
 
         jyloader = JYDataLoader()
         tradingdays = jyloader.get_tradingday(tradingDay, tradingDay)
-        clientIDs = list(clientIds.split(';'))
-        self.email = EmailHelper.instance()
 
+        cfg = RawConfigParser()
+        cfg.read('config.ini')
+        clientIds = cfg.get('AlgoDetailReport', 'id')
+        clientIDs = list(clientIds.split(';'))
+
+        self.to_receiver = cfg.get('Email', 'to_receiver')
+        self.cc_receiver = cfg.get('Email', 'cc_receiver')
+
+        self.sender = cfg.get('Email', 'sender')
+        self.pwd = cfg.get('Email', 'pwd')
+        self.post = cfg.get('Email', 'server')
+
+        self.email = EmailHelper.instance()
         self.run(tradingdays, clientIDs)
 
     def get_connection(self):
@@ -50,28 +63,6 @@ class AlgoDetailReporter(object):
                 return self.conn
             except pymssql.OperationalError as e:
                 print(e)
-
-    def get_receiveList(self, clientId):
-        accountIds = []
-        clientIds = []
-        clientName = []
-        to_receiver = []
-        cc_receiver = []
-
-        with self.get_connection() as conn:
-            with conn.cursor(as_dict=True) as cursor:
-                stmt = f"select * from Clients where clientId = \'{clientId}\'"
-                cursor.execute(stmt)
-                for row in cursor:
-                    accountIds.append(row['accountId'])
-                    clientIds.append(row['clientId'])
-                    clientName.append(row['clientName'])
-                    to_receiver.append(row['email'])
-                    cc_receiver.append(row['repsentEmail'])
-
-        data = pd.DataFrame({'accountId': accountIds, 'clientId': clientIds, 'clientName': clientName, 'to_receiver': to_receiver,
-                             'cc_receiver': cc_receiver})
-        return data
 
     def get_all_clientOrder(self, tradingday, clientId):
         """
@@ -301,6 +292,7 @@ class AlgoDetailReporter(object):
                 self.logger.info(f'start calculator: {tradingDay}__{clientId}')
                 self.email.add_email_content(f'{tradingDay}_({clientId})统计报告，请查收')
 
+                # 所有订单
                 all_clientOrders = self.get_all_clientOrder(tradingDay, clientId)
                 total_trade_num = len(all_clientOrders)
                 total_turnover = round(sum(all_clientOrders['turnover'] / 10000, 2))
@@ -308,63 +300,62 @@ class AlgoDetailReporter(object):
                     all_clientOrders['slipageByVwap'] * all_clientOrders['turnover']) / sum(
                     all_clientOrders['turnover']), 2)
 
-
-                #表1
+                # 表1
                 df_total_effect = pd.DataFrame(
                     {'clientId': clientId, '订单数': total_trade_num, '成交额(万元)': total_turnover,
                      '交易效果(bps)': total_slipage}, index=[1])
 
-                all_clientOrders_sh = all_clientOrders[all_clientOrders['exDestination'] == 0]
-                all_clientOrders_sz = all_clientOrders[all_clientOrders['exDestination'] == 1]
+                all_clientOrders_sh = all_clientOrders[all_clientOrders['exDestination'] == 0]  # 上海所有订单
+                all_clientOrders_sz = all_clientOrders[all_clientOrders['exDestination'] == 1]  # 深圳所有订单
 
-                all_has_signal_clientOrders = self.get_has_signal_clientOrder(tradingDay, clientId)
+                all_has_signal_clientOrders = self.get_has_signal_clientOrder(tradingDay, clientId)  # 所有信号单
                 all_has_signal_clientOrders_sh = all_has_signal_clientOrders[
-                    all_has_signal_clientOrders['exDestination'] == 0]
+                    all_has_signal_clientOrders['exDestination'] == 0]  # 所有上海信号单
                 all_has_signal_clientOrders_sz = all_has_signal_clientOrders[
-                    all_has_signal_clientOrders['exDestination'] == 1]
+                    all_has_signal_clientOrders['exDestination'] == 1]  # 所有深圳信号单
 
-                all_nothas_signal_clientOrders = self.get_nothas_signal_clientOrder(tradingDay, clientId)
+                all_nothas_signal_clientOrders = self.get_nothas_signal_clientOrder(tradingDay, clientId)  # 所有非信号单
                 all_nothas_signal_clientOrders_sh = all_nothas_signal_clientOrders[
-                    all_nothas_signal_clientOrders['exDestination'] == 0]
+                    all_nothas_signal_clientOrders['exDestination'] == 0]  # 所有上海非信号单
                 all_nothas_signal_clientOrders_sz = all_nothas_signal_clientOrders[
-                    all_nothas_signal_clientOrders['exDestination'] == 1]
+                    all_nothas_signal_clientOrders['exDestination'] == 1]  # 所有深圳非信号单
 
                 list_sh = []
                 list_sz = []
-                list_sh.append(round(sum(all_clientOrders_sh['turnover']) / 10000, 2))
-                list_sz.append(round(sum(all_clientOrders_sz['turnover']) / 10000, 2))
-                list_sh.append(len(all_clientOrders_sh))
-                list_sz.append(len(all_clientOrders_sz))
+                list_sh.append(round(sum(all_clientOrders_sh['turnover']) / 10000, 2))  # 上海单总成价额
+                list_sz.append(round(sum(all_clientOrders_sz['turnover']) / 10000, 2))  # 深圳单总成价额
+                list_sh.append(len(all_clientOrders_sh))  # 上海订单数
+                list_sz.append(len(all_clientOrders_sz))  # 深圳订单数
                 list_sh.append(0 if sum(
                     all_clientOrders_sh['turnover']) == 0 else round(sum(
                     all_clientOrders_sh['slipageByVwap'] * all_clientOrders_sh['turnover']) / sum(
-                    all_clientOrders_sh['turnover']), 2))
+                    all_clientOrders_sh['turnover']), 2))  # 上海单交易效果
                 list_sz.append(0 if sum(
                     all_clientOrders_sz['turnover']) == 0 else round(sum(
                     all_clientOrders_sz['slipageByVwap'] * all_clientOrders_sz['turnover']) / sum(
-                    all_clientOrders_sz['turnover']), 2))
+                    all_clientOrders_sz['turnover']), 2))  # 深圳单交易效果
 
-                list_sh.append(round(sum(all_has_signal_clientOrders_sh['turnover']) / 10000, 2))
-                list_sz.append(round(sum(all_has_signal_clientOrders_sz['turnover']) / 10000, 2))
+                list_sh.append(round(sum(all_has_signal_clientOrders_sh['turnover']) / 10000, 2))  # 上海信号单成交额
+                list_sz.append(round(sum(all_has_signal_clientOrders_sz['turnover']) / 10000, 2))  # 深圳信号单成交额
                 list_sh.append(0 if sum(
                     all_has_signal_clientOrders_sh['turnover']) == 0 else round(sum(
                     all_has_signal_clientOrders_sh['slipageByVwap'] * all_has_signal_clientOrders_sh['turnover']) / sum(
-                    all_has_signal_clientOrders_sh['turnover']), 2))
+                    all_has_signal_clientOrders_sh['turnover']), 2))  # 上海信号单交易效果
                 list_sz.append(0 if sum(
                     all_has_signal_clientOrders_sz['turnover']) == 0 else round(sum(
                     all_has_signal_clientOrders_sz['slipageByVwap'] * all_has_signal_clientOrders_sz['turnover']) / sum(
-                    all_has_signal_clientOrders_sz['turnover']), 2))
+                    all_has_signal_clientOrders_sz['turnover']), 2))  # 深圳信号单交易效果
 
-                list_sh.append(round(sum(all_nothas_signal_clientOrders_sh['turnover']) / 10000, 2))
-                list_sz.append(round(sum(all_nothas_signal_clientOrders_sz['turnover']) / 10000, 2))
+                list_sh.append(round(sum(all_nothas_signal_clientOrders_sh['turnover']) / 10000, 2))  # 上海非信号单成交额
+                list_sz.append(round(sum(all_nothas_signal_clientOrders_sz['turnover']) / 10000, 2))  # 深圳非信号单成交额
                 list_sh.append(0 if sum(
                     all_nothas_signal_clientOrders_sh['turnover']) == 0 else round(sum(
                     all_nothas_signal_clientOrders_sh['slipageByVwap'] * all_nothas_signal_clientOrders_sh[
-                        'turnover']) / sum(all_nothas_signal_clientOrders_sh['turnover']), 2))
+                        'turnover']) / sum(all_nothas_signal_clientOrders_sh['turnover']), 2))  # 上海非信号单交易效果
                 list_sz.append(0 if sum(
                     all_nothas_signal_clientOrders_sz['turnover']) == 0 else round(sum(
                     all_nothas_signal_clientOrders_sz['slipageByVwap'] * all_nothas_signal_clientOrders_sz[
-                        'turnover']) / sum(all_nothas_signal_clientOrders_sz['turnover']), 2))
+                        'turnover']) / sum(all_nothas_signal_clientOrders_sz['turnover']), 2))  # 深圳非信号单交易效果
 
                 df_client_exchange_order = self.join_client_exchange_Order(tradingDay=tradingDay, clientId=clientId)
                 df_client_exchange_order_sh = df_client_exchange_order[df_client_exchange_order['exDestination'] == 0]
@@ -372,88 +363,93 @@ class AlgoDetailReporter(object):
 
                 # 上海深圳筛选SignalType
                 df_client_exchange_order_sh_forward = df_client_exchange_order_sh[
-                    df_client_exchange_order_sh['signalType'] == 'Forward']
+                    df_client_exchange_order_sh['signalType'] == 'Forward']  # 上海同向信号订单
                 df_client_exchange_order_sh_reverse = df_client_exchange_order_sh[
-                    df_client_exchange_order_sh['signalType'] == 'Reverse']
+                    df_client_exchange_order_sh['signalType'] == 'Reverse']  # 上海反向信号订单
                 df_client_exchange_order_sh_first1 = df_client_exchange_order_sh[
-                    df_client_exchange_order_sh['signalType'] == 'First1']
+                    df_client_exchange_order_sh['signalType'] == 'First1']  # 上海同向首次信号订单
 
                 df_client_exchange_order_sz_forward = df_client_exchange_order_sz[
-                    df_client_exchange_order_sz['signalType'] == 'Forward']
+                    df_client_exchange_order_sz['signalType'] == 'Forward']  # 深圳同向信号订单
                 df_client_exchange_order_sz_reverse = df_client_exchange_order_sz[
-                    df_client_exchange_order_sz['signalType'] == 'Reverse']
+                    df_client_exchange_order_sz['signalType'] == 'Reverse']  # 深圳反向信号订单
                 df_client_exchange_order_sz_first1 = df_client_exchange_order_sz[
-                    df_client_exchange_order_sz['signalType'] == 'First1']
+                    df_client_exchange_order_sz['signalType'] == 'First1']  # 深圳同向首次信号订单
 
                 list_sh.append(0 if sum(
                     df_client_exchange_order_sh_forward['turnover']) == 0 else round(sum(
                     df_client_exchange_order_sh_forward['slipageByVwap'] * df_client_exchange_order_sh_forward[
-                        'turnover']) / sum(df_client_exchange_order_sh_forward['turnover']) * 10000, 2))
+                        'turnover']) / sum(df_client_exchange_order_sh_forward['turnover']) * 10000, 2))  # 上海同向信号交易效果
                 list_sz.append(0 if sum(
                     df_client_exchange_order_sz_forward['turnover']) == 0 else round(sum(
                     df_client_exchange_order_sz_forward['slipageByVwap'] * df_client_exchange_order_sz_forward[
-                        'turnover']) / sum(df_client_exchange_order_sz_forward['turnover']) * 10000, 2))
+                        'turnover']) / sum(df_client_exchange_order_sz_forward['turnover']) * 10000, 2))  # 深圳同向信号交易效果
 
                 list_sh.append(0 if sum(
                     df_client_exchange_order_sh_reverse['turnover']) == 0 else round(sum(
                     df_client_exchange_order_sh_reverse['slipageByVwap'] * df_client_exchange_order_sh_reverse[
-                        'turnover']) / sum(df_client_exchange_order_sh_reverse['turnover']) * 10000, 2))
+                        'turnover']) / sum(df_client_exchange_order_sh_reverse['turnover']) * 10000, 2))  # 上海反向信号交易效果
                 list_sz.append(0 if sum(
                     df_client_exchange_order_sz_reverse['turnover']) == 0 else round(sum(
                     df_client_exchange_order_sz_reverse['slipageByVwap'] * df_client_exchange_order_sz_reverse[
-                        'turnover']) / sum(df_client_exchange_order_sz_reverse['turnover']) * 10000, 2))
+                        'turnover']) / sum(df_client_exchange_order_sz_reverse['turnover']) * 10000, 2))  # 深圳反向信号交易效果
 
                 list_sh.append(0 if sum(
                     df_client_exchange_order_sh_first1['turnover']) == 0 else round(sum(
                     df_client_exchange_order_sh_first1['slipageByVwap'] * df_client_exchange_order_sh_first1[
-                        'turnover']) / sum(df_client_exchange_order_sh_first1['turnover']) * 10000, 2))
+                        'turnover']) / sum(df_client_exchange_order_sh_first1['turnover']) * 10000, 2))  # 上海同向首次信号交易效果
                 list_sz.append(0 if sum(
                     df_client_exchange_order_sz_first1['turnover']) == 0 else round(sum(
                     df_client_exchange_order_sz_first1['slipageByVwap'] * df_client_exchange_order_sz_first1[
-                        'turnover']) / sum(df_client_exchange_order_sz_first1['turnover']) * 10000, 2))
+                        'turnover']) / sum(df_client_exchange_order_sz_first1['turnover']) * 10000, 2))  # 深圳同向首次信号交易效果
 
                 # 表2
                 list_summary = ['交易额(万元)', '订单数', '交易效果', '信号交易额(万元)', '信号交易效果', '非信号交易额(万元)', '非信号交易效果',
                                 '同向信号交易效果', '反向信号交易效果', '同向首次信号交易效果']
                 df_market_effect = pd.DataFrame({'指标': list_summary, 'SZ': list_sz, 'SH': list_sh})
 
-                df_sh_amt_bps = self.df_stat_bs_amt_bps(df_client_exchange_order_sh)
+                df_sh_amt_bps = self.df_stat_bs_amt_bps(df_client_exchange_order_sh)  # 分买卖上海订单成交额与效果
                 df_sh_amt_bps.columns = ['方向', '上海总成交金额(万元)', '效果(bps)']
 
                 df_sh_amt_bps_signal = self.df_stat_bs_amt_bps(
-                    df_client_exchange_order_sh[df_client_exchange_order_sh['signalType'] != 'Normal'])
+                    df_client_exchange_order_sh[
+                        df_client_exchange_order_sh['signalType'] != 'Normal'])  # 分买卖上海信号单成交额与效果
                 df_sh_amt_bps_signal.columns = ['方向', '上海信号单成交额(万元)', '效果(bps)']
 
                 df_sh_amt_bps_notsignal = self.df_stat_bs_amt_bps(
-                    df_client_exchange_order_sh[df_client_exchange_order_sh['signalType'] == 'Normal'])
+                    df_client_exchange_order_sh[
+                        df_client_exchange_order_sh['signalType'] == 'Normal'])  # 分买卖上海非信号单成交额与效果
                 df_sh_amt_bps_notsignal.columns = ['方向', '上海非信号单成交额(万元)', '效果(bps)']
 
-                df_sz_amt_bps = self.df_stat_bs_amt_bps(df_client_exchange_order_sz)
+                df_sz_amt_bps = self.df_stat_bs_amt_bps(df_client_exchange_order_sz)  # 分买卖深圳订单成交额与效果
                 df_sz_amt_bps.columns = ['方向', '深圳总成交金额(万元)', '效果(bps)']
 
                 df_sz_amt_bps_signal = self.df_stat_bs_amt_bps(
-                    df_client_exchange_order_sz[df_client_exchange_order_sz['signalType'] != 'Normal'])
+                    df_client_exchange_order_sz[
+                        df_client_exchange_order_sz['signalType'] != 'Normal'])  # 分买卖深圳信号单成交额与效果
                 df_sz_amt_bps_signal.columns = ['方向', '深圳信号单成交额(万元)', '效果(bps)']
 
                 df_sz_amt_bps_notsignal = self.df_stat_bs_amt_bps(
-                    df_client_exchange_order_sz[df_client_exchange_order_sz['signalType'] == 'Normal'])
+                    df_client_exchange_order_sz[
+                        df_client_exchange_order_sz['signalType'] == 'Normal'])  # 分买卖深圳非信号单成交额与效果
                 df_sz_amt_bps_notsignal.columns = ['方向', '深圳非信号单成交额(万元)', '效果(bps)']
 
                 dict_signal_to_bool = {'Normal': '否', 'Signal': '是'}
                 df_effect_by_signal = self.stat_effect_by_signal(tradingDay=tradingDay, clientId=clientId)
                 df_effect_by_signal['signalType'] = df_effect_by_signal['signalType'].map(
                     lambda x: dict_signal_to_bool.get(x))
-                df_effect_by_signal.columns = ['时段', '信号单', '交易额(万元)', '交易效果(bps)']
+                df_effect_by_signal.columns = ['时段', '信号单', '交易额(万元)', '交易效果(bps)']  # 时段统计 是否信号单 成交额与效果
 
                 dict_int_to_side = {1: '买', 2: '卖'}
                 df_effect_by_side = self.stat_effect_by_side(tradingDay=tradingDay, clientId=clientId)
                 df_effect_by_side['side'] = df_effect_by_side['side'].map(
-                    lambda x: dict_int_to_side.get(x))
+                    lambda x: dict_int_to_side.get(x))  # 时段统计 分买卖 成交额与效果
                 df_effect_by_side.columns = ['时段', '方向', '交易额(万元)', '交易效果(bps)']
 
-                df_receive = self.get_receiveList(clientId)
+                df_receive = pd.DataFrame({'to_receiver': self.to_receiver, 'cc_receiver': self.cc_receiver,
+                                           'clientName': self.dict_id_clientName[clientId], 'clientId': clientId},index=[1])
                 df_receive['tradingDay'] = tradingDay
-                fileName = f'{tradingDay}_({clientId})_AlgoDetailReporter.xlsx'
+                fileName = f'{tradingDay}_({clientId})_AlgoSignalReporter.xlsx'
                 pathCsv = os.path.join(f'Data/{fileName}')
 
                 ExcelHelper.createExcel(pathCsv)
@@ -479,14 +475,169 @@ class AlgoDetailReporter(object):
                 ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=df_effect_by_side, header=True,
                                                interval=3, sheet_name=clientId)
 
+                self.calSignalEffect(clientId, pathCsv, tradingDay, tradingDay, 0)
+                # for clientId in self.ClientIDs:
+                #     if len(clientId) == 0:
+                #         continue
+                #     self.calSignalEffect(clientId, pathCsv, tradingDay, tradingDay, 0)
+                # for accountId in self.AccountIDs:
+                #     if len(accountId) == 0:
+                #         continue
+                #     self.calSignalEffect(accountId, pathCsv, tradingDay, tradingDay, 1)
+
                 ExcelHelper.removeSheet(pathCsv, 'Sheet')
+
                 self.email.send_email_file(pathCsv, fileName, df_receive)
                 self.logger.info(f'calculator: {tradingDay}__{clientId} successfully')
 
+    def calSignalEffect(self, clientId, pathCsv, start, end, isclinet):
+        # 1.信号效果
+        dfSignalEffect = self._statSignalEffect(start, end, clientId, isclinet)
+        # 2.订单成交率
+        dfTurnoverRatio, dfTurnoverRatiowithQty = self._statTurnOverRatio(start, end, clientId, isclinet)
+        dfTurnoverRatio.columns = dfTurnoverRatio.columns.map(lambda x: Constants.PlacementCategoryDict[x])
+        dfTurnoverRatiowithQty['category'] = dfTurnoverRatiowithQty['category'].map(
+            lambda x: Constants.PlacementCategoryDict[x])
+        # 2.1 合并信号效果与订单成交率
+        if dfSignalEffect.shape[0] > 0:
+            dfSignalEffect = dfSignalEffect.merge(dfTurnoverRatio, left_on='type', right_on=dfTurnoverRatio.index,
+                                                  how='left')
+            dfSignalEffect = dfSignalEffect[
+                ['Id', 'type', 'turnover', 'slipage', 'Aggressive', 'Passive', 'UltraPassive']]
+            dfSignalEffect['type'] = dfSignalEffect['type'].map(lambda x: Constants.SingalType2Chn[x])
+        # 3. passive/ultraPassive 比例
+        try:
+            dfRatio = self._statRelativeRate(clientId, dfTurnoverRatiowithQty)
+        except Exception as e:
+            dfRatio = None
+            self.logger.error(e)
+            self.logger.error('passive / ultraPassive比例')
+
+        # 4.客户slipage排名
+        dfSlipageInBps = self._statSlipageInBps(start, end, clientId, isclinet)
+        dfSlipageInBpsWorse20 = dfSlipageInBps.head(20)
+        dfSlipageInBpsBetter20 = dfSlipageInBps.tail(20)
+        dfSlipageInBpsBetter20.sort_values(by='slipageInBps', axis=0, ascending=False, inplace=True)
+        dfSlipageInBpsBetter20 = dfSlipageInBpsBetter20.reset_index(drop=True)
+
+        if not dfSignalEffect is None:
+            ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=dfSignalEffect, header=True, sheet_name=clientId,
+                                           interval=3)
+        if not dfRatio is None:
+            ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=dfRatio, header=True, interval=4, sheet_name=clientId,
+                                           )
+        if not dfSlipageInBpsWorse20 is None:
+            ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=dfSlipageInBpsWorse20, header=True, interval=4,
+                                           sheet_name=clientId)
+        if not dfSlipageInBpsBetter20 is None:
+            ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=dfSlipageInBpsBetter20, header=True, interval=4,
+                                           sheet_name=clientId)
+
+    def _statSignalEffect(self, start, end, Id, isClient):
+        try:
+            clientIds = []
+            type = []
+            turnover = []
+            spread = []
+            with self.get_connection() as conn:
+                with conn.cursor(as_dict=True) as cursor:
+                    proc = 'spu_SignalEffect'
+                    cursor.callproc(proc, (Id, start, end, isClient))
+                    for row in cursor:
+                        clientIds.append(Id)
+                        type.append(row['signalType'])
+                        turnover.append(row['turnover'])
+                        spread.append(row['spread'])
+
+            df = pd.DataFrame({'Id': clientIds, 'type': type, 'turnover': turnover, 'slipage': spread})
+            return df
+
+        except Exception as e:
+            self.Log.error(e)
+            return pd.DataFrame()
+
+    def _statTurnOverRatio(self, start, end, clientId, isClient):
+        category = []
+        cumQty = []
+        orderQty = []
+        signalType = []
+        fillRatio = []
+        with self.get_connection() as conn:
+            with conn.cursor(as_dict=True) as cursor:
+                proc = 'spu_StatTurnoverRatio'
+                cursor.callproc(proc, (clientId, start, end, isClient))
+                for row in cursor:
+                    category.append(row['category'])
+                    signalType.append(row['signalType'])
+                    cumQty.append([row['cumQty']])
+                    orderQty.append([row['Qty']])
+                    fillRatio.append(row['fillRatio'])
+
+        df = pd.DataFrame({'category': category, 'signalType': signalType, 'cumQty': cumQty, 'orderQty': orderQty,
+                           'fillRatio': fillRatio})
+        dfpivot = df.pivot(index='signalType', columns='category', values='fillRatio')
+        return dfpivot, df
+
+    def _statRelativeRate(self, id, df):
+        try:
+            ids = []
+            type = []
+            normalRate = []
+            reveRate = []
+
+            ids.append(id)
+            type.append('passive/ultraPassive')
+            cumQtyNormalPassive = \
+                (df[(df['signalType'] == 'Normal') & (df['category'] == 'Passive')]['cumQty']).values[0][
+                    0]
+            cumQtyNormalUltraPassive = \
+                (df[(df['signalType'] == 'Normal') & (df['category'] == 'UltraPassive')]['cumQty']).values[0][0]
+            normalRate.append(round(cumQtyNormalPassive / cumQtyNormalUltraPassive, 4))
+
+            cumQtyRevePassive = \
+                (df[(df['signalType'] == 'Reverse') & (df['category'] == 'Passive')]['cumQty']).values[0][0]
+            cumQtyReveUltraPassive = \
+                (df[(df['signalType'] == 'Reverse') & (df['category'] == 'UltraPassive')]['cumQty']).values[0][0]
+            reveRate.append(round(cumQtyRevePassive / cumQtyReveUltraPassive, 4))
+
+            df = pd.DataFrame({'id': ids, 'description': type, 'normalRate': normalRate, 'reverseRate': reveRate})
+
+            return df
+        except Exception as e:
+            self.Log.error(e)
+            return pd.DataFrame()
+
+    def _statSlipageInBps(self, start, end, Id, isClient):
+        ids = []
+        symbol = []
+        side = []
+        orderQty = []
+        slipageInBps = []
+        effectiveTime = []
+        expireTime = []
+        idtype = "clientId" if isClient == 0 else "accountId"
+        with self.get_connection() as conn:
+            with conn.cursor(as_dict=True) as cursor:
+                sql = f"SELECT symbol,side, orderQty, slipageInBps, effectiveTime, expireTime FROM ClientOrderView WHERE {idtype} LIKE \'{Id}\' AND tradingDay >= \'{start}\' AND tradingDay <= \'{end}\' AND avgPrice * cumQty > 500000 ORDER BY slipageInBps"
+                cursor.execute(sql)
+                for row in cursor:
+                    ids.append(Id)
+                    symbol.append(row['symbol'])
+                    orderQty.append(row['orderQty'])
+                    side.append(row['side'])
+                    slipageInBps.append(row['slipageInBps'])
+                    effectiveTime.append(row['effectiveTime'])
+                    expireTime.append(row['expireTime'])
+
+        df = pd.DataFrame(
+            {'Id': ids, 'symbol': symbol, 'side': side, 'orderQty': orderQty, 'slipageInBps': slipageInBps,
+             'effectiveTime': effectiveTime, 'expireTime': expireTime})
+
+        df['effectiveTime'] = df['effectiveTime'].map(lambda x: x.strftime('%H:%M:%S'))
+        df['expireTime'] = df['expireTime'].map(lambda x: x.strftime('%H:%M:%S'))
+        return df
+
 
 if __name__ == '__main__':
-    cfg = RawConfigParser()
-    cfg.read('config.ini')
-    clientIds = cfg.get('AlgoDetailReport', 'id')
     tradingDay = sys.argv[1]
-    reporter = AlgoDetailReporter(tradingDay, clientIds)
+    reporter = AlgoSignalReporter(tradingDay)

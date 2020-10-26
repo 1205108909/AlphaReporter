@@ -33,7 +33,7 @@ class App(object):
 
         cfg = RawConfigParser()
         cfg.read('config.ini')
-        self.ClientID = cfg.get('ClientID', 'id')
+        self.ClientID = cfg.get('AlgoTradeReport', 'id')
         self.ClientIDs = list(self.ClientID.split(';'))
         self.AccountID = cfg.get('AccountID', 'id')
         self.AccountIDs = list(self.AccountID.split(';'))

@@ -42,12 +42,13 @@ class AlgoTradeReporter(object):
             except pymssql.OperationalError as e:
                 print(e)
 
+
     def get_receiveList(self, clientId):
         accountIds = []
         clientIds = []
         clientName = []
-        email = []
-        repsentEmail = []
+        to_receiver = []
+        cc_receiver = []
 
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
@@ -57,11 +58,11 @@ class AlgoTradeReporter(object):
                     accountIds.append(row['accountId'])
                     clientIds.append(row['clientId'])
                     clientName.append(row['clientName'])
-                    email.append(row['email'])
-                    repsentEmail.append(row['repsentEmail'])
+                    to_receiver.append(row['email'])
+                    cc_receiver.append(row['repsentEmail'])
 
-        data = pd.DataFrame({'accountId': accountIds, 'clientId': clientIds, 'clientName': clientName, 'email': email,
-                             'repsentEmail': repsentEmail})
+        data = pd.DataFrame({'accountId': accountIds, 'clientId': clientIds, 'clientName': clientName, 'to_receiver': to_receiver,
+                             'cc_receiver': cc_receiver})
         return data
 
     def get_clientOrder(self, tradingday, clientId):

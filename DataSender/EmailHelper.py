@@ -31,8 +31,10 @@ class EmailHelper(object):
         self.content = ''
         cfg = RawConfigParser()
         cfg.read('config.ini')
-        receivers = cfg.get('Email', 'receiveList')
-        self.receivers = receivers.split(';')  # 接收邮箱
+        to_receivers = cfg.get('Email', 'to_receiver')
+        cc_receivers = cfg.get('Email', 'cc_receiver')
+        self.receivers = list(set(to_receivers.split(';') + cc_receivers.split(';')))  # 接收邮箱
+
         self.sender = cfg.get('Email', 'sender')
         self.pwd = cfg.get('Email', 'pwd')
         self.server = cfg.get('Email', 'server')
@@ -114,20 +116,20 @@ class EmailHelper(object):
             return
         if df_receive.shape[0] == 0:
             return
-        to_reciver = df_receive.loc[0, 'email'].split(';')
-        cc_reciver = df_receive.loc[0, 'repsentEmail'].split(';')
-        clientName = df_receive.loc[0, 'clientName']
-        clientId = df_receive.loc[0, 'clientId']
-        tradingDay = df_receive.loc[0, 'tradingDay']
+        to_receiver = df_receive.iloc[0, :]['to_receiver'].split(';')
+        cc_receiver = df_receive.iloc[0, :]['cc_receiver'].split(';')
+        clientName = df_receive.iloc[0, :]['clientName']
+        clientId = df_receive.iloc[0, :]['clientId']
+        tradingDay = df_receive.iloc[0, :]['tradingDay']
         subject = f'算法交易报告:{clientName}({clientId})_{tradingDay}'
         # 创建一个带附件的实例
         message = MIMEMultipart()
         message['From'] = self.sender
-        message['To'] = ";".join(to_reciver)
-        message['Cc'] = ";".join(cc_reciver)
+        message['To'] = ";".join(to_receiver)
+        message['Cc'] = ";".join(cc_receiver)
         message['Subject'] = Header(subject, 'utf-8')
 
-        self.receivers = to_reciver + cc_reciver
+        self.receivers = list(set(to_receiver + cc_receiver))
 
         # 邮件正文内容
         message.attach(MIMEText(self.content, 'plain', 'utf-8'))
@@ -142,7 +144,7 @@ class EmailHelper(object):
             smtpObj = smtplib.SMTP()
             smtpObj.connect(self.server)
             smtpObj.login(self.sender, self.pwd)
-            smtpObj.sendmail(self.sender, self.receivers, message.as_string())
+            # smtpObj.sendmail(self.sender, self.receivers, message.as_string())
             print("邮件发送成功")
             if is_clear_content:
                 self.content == ''
