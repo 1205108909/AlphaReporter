@@ -11,6 +11,12 @@ import openpyxl
 import pandas as pd
 
 
+class SepKeyType:
+    all_name = 'all_name',
+    file_name = 'file_name',
+    sheet_name = 'sheet_name',
+
+
 class ExcelHelper(object):
     _dictSheetStartrow = {}
     _dictSheetLastdfShape = {}
@@ -25,7 +31,12 @@ class ExcelHelper(object):
                            truncate_sheet=False,
                            **to_excel_kwargs):
 
-        key = file_name if sep_key == 'file_name' else sheet_name
+        if sep_key == 'all_name':
+            key = file_name + sheet_name
+        elif sep_key == 'file_name':
+            key = file_name
+        else:
+            key = sheet_name
         writer = pd.ExcelWriter(file_name, engine='openpyxl')
 
         try:
