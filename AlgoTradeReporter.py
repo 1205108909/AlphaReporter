@@ -368,7 +368,7 @@ class AlgoTradeReporter(object):
                 ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=df_exchange_order,
                                                header=True, sheet_name='algoExchangeOrder', sep_key='all_name')
                 ExcelHelper.removeSheet(pathCsv, 'Sheet')
-                # self.email.send_email_file(pathCsv, fileName, df_receive)
+                self.email.send_email_file(pathCsv, fileName, df_receive)
                 self.logger.info(f'calculator: {tradingDay}__{clientId} successfully')
 
 

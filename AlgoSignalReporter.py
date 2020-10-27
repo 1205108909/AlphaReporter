@@ -619,7 +619,7 @@ class AlgoSignalReporter(object):
         idtype = "clientId" if isClient == 0 else "accountId"
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
-                sql = f"SELECT symbol,side, orderQty, slipageInBps, effectiveTime, expireTime FROM ClientOrderView WHERE {idtype} LIKE \'{Id}\' AND tradingDay >= \'{start}\' AND tradingDay <= \'{end}\' AND avgPrice * cumQty > 500000 ORDER BY slipageInBps"
+                sql = f"SELECT symbol,side, orderQty, slipageInBps, effectiveTime, expireTime FROM ClientOrderView WHERE {idtype} LIKE \'{Id}\' AND tradingDay >= \'{start}\' AND tradingDay <= \'{end}\' AND avgPrice * cumQty > 100000 ORDER BY slipageInBps"
                 cursor.execute(sql)
                 for row in cursor:
                     ids.append(Id)
