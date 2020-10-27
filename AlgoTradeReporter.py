@@ -87,7 +87,7 @@ class AlgoTradeReporter(object):
         VWAP = []
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
-                stmt = f"select * from ClientOrderView where orderQty>0 and tradingDay = \'{tradingday}\' and clientId like \'{clientId}\'"
+                stmt = f"select * from ClientOrderView where orderQty>0 and (securityType='RPO' or securityType='EQA') and tradingDay = \'{tradingday}\' and clientId like \'{clientId}\'"
                 cursor.execute(stmt)
                 for row in cursor:
                     orderId.append(row['orderId'])
@@ -204,6 +204,8 @@ class AlgoTradeReporter(object):
 
     def get_tick_by_symbol(self, tradingDay, symbol, startTime=90000000, endTime=160000000, price=0, side='Buy'):
         df_tick_symbol = self.read_symbol_tick(tradingDay, symbol)
+        if df_tick_symbol.shape[0] == 0:
+            return pd.DataFrame()
         if price == 0:
             return df_tick_symbol[(df_tick_symbol['Time'] >= startTime) & (df_tick_symbol['Time'] <= endTime) & (
                     df_tick_symbol['Volume'] > 0)]
