@@ -144,7 +144,7 @@ class EmailHelper(object):
             smtpObj = smtplib.SMTP()
             smtpObj.connect(self.server)
             smtpObj.login(self.sender, self.pwd)
-            # smtpObj.sendmail(self.sender, self.receivers, message.as_string())
+            smtpObj.sendmail(self.sender, self.receivers, message.as_string())
             print("邮件发送成功")
             if is_clear_content:
                 self.content == ''

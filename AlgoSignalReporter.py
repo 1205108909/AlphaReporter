@@ -28,7 +28,7 @@ pd.set_option('display.max_rows', None)
 
 
 class AlgoSignalReporter(object):
-    dict_id_clientName = {'Cld_TRX_5001008': '富善投资', 'Cld_TRX_5001093': '泰铼投资'}
+    dict_id_clientName = {'Cld_TRX_5001008': '富善投资', 'Cld_TRX_5001093': '泰铼投资', 'Cld_ZYZC%': '中意资产'}
 
     def __init__(self, tradingDay):
         self.logger = Log.get_logger(__name__)
@@ -447,7 +447,8 @@ class AlgoSignalReporter(object):
                 df_effect_by_side.columns = ['时段', '方向', '交易额(万元)', '交易效果(bps)']
 
                 df_receive = pd.DataFrame({'to_receiver': self.to_receiver, 'cc_receiver': self.cc_receiver,
-                                           'clientName': self.dict_id_clientName[clientId], 'clientId': clientId},index=[1])
+                                           'clientName': self.dict_id_clientName[clientId], 'clientId': clientId},
+                                          index=[1])
                 df_receive['tradingDay'] = tradingDay
                 fileName = f'{tradingDay}_({clientId})_AlgoSignalReporter.xlsx'
                 pathCsv = os.path.join(f'Data/{fileName}')

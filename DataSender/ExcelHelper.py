@@ -11,12 +11,6 @@ import openpyxl
 import pandas as pd
 
 
-class SepKeyType:
-    all_name = 'all_name',
-    file_name = 'file_name',
-    sheet_name = 'sheet_name',
-
-
 class ExcelHelper(object):
     _dictSheetStartrow = {}
     _dictSheetLastdfShape = {}
