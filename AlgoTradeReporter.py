@@ -173,9 +173,10 @@ class AlgoTradeReporter(object):
              'orderStatus': orderStatus})
 
         data['cumQty'] = data['cumQty'].astype('int')
-        data['effectiveTime'] = (data['effectiveTime'] + datetime.timedelta(hours=8)).map(
-            lambda x: x.strftime('%H:%M:%S'))
-        data.sort_values(by=['effectiveTime'], inplace=True)
+        if data['effectiveTime'].shape[0] > 0:
+            data['effectiveTime'] = (data['effectiveTime'] + datetime.timedelta(hours=8)).map(
+                lambda x: x.strftime('%H:%M:%S'))
+            data.sort_values(by=['effectiveTime'], inplace=True)
         return data
 
     def read_symbol_tick(self, tradingday, symbol):
@@ -212,10 +213,12 @@ class AlgoTradeReporter(object):
         else:
             if side == 'Buy' or side == 1:
                 return df_tick_symbol[
-                    (df_tick_symbol['Time'] >= startTime) & (df_tick_symbol['Time'] <= endTime) & (df_tick_symbol['Volume'] > 0)]
+                    (df_tick_symbol['Time'] >= startTime) & (df_tick_symbol['Time'] <= endTime) & (
+                                df_tick_symbol['Volume'] > 0)]
             else:
                 return df_tick_symbol[
-                    (df_tick_symbol['Time'] >= startTime) & (df_tick_symbol['Time'] <= endTime) & (df_tick_symbol['Volume'] > 0)]
+                    (df_tick_symbol['Time'] >= startTime) & (df_tick_symbol['Time'] <= endTime) & (
+                                df_tick_symbol['Volume'] > 0)]
 
     def get_twap(self, tradingDay, symbol, startTime=90000000, endTime=160000000, price=0, side='Buy'):
         data = self.get_tick_by_symbol(tradingDay, symbol, startTime, endTime, price, side)
@@ -293,6 +296,8 @@ class AlgoTradeReporter(object):
                 self.email.add_email_content(f'{tradingDay}_({clientId})交易报告，请查收')
 
                 clientOrders = self.get_clientOrder(tradingDay, clientId)
+                if clientOrders.size == 0:
+                    continue
                 df_client_order_count = self.get_client_order_count(tradingDay, clientId)
                 df_client_order_count['sliceStatus'] = df_client_order_count['sliceStatus'].map(lambda x: x + 'Count')
                 df_client_order_count = df_client_order_count.pivot(index='orderId', columns='sliceStatus',
@@ -308,25 +313,24 @@ class AlgoTradeReporter(object):
                 slipageByVWAPs = clientOrders.pop('slipageByVWAP')
                 clientOrders.insert(clientOrders.shape[1], 'slipageByVWAP', slipageByVWAPs)
 
-                if clientOrders.size > 0:
-                    # 1.计算twap
-                    clientOrders['TWAP'] = clientOrders.apply(
-                        lambda x: cal_twap(tradingDay, x['effectiveTime'], x['expireTime'], x['symbol'], x['avgPrice'],
-                                           x['side'], x['cumQty']), axis=1)
+                # 1.计算twap
+                clientOrders['TWAP'] = clientOrders.apply(
+                    lambda x: cal_twap(tradingDay, x['effectiveTime'], x['expireTime'], x['symbol'], x['avgPrice'],
+                                       x['side'], x['cumQty']), axis=1)
 
-                    # 2.计算slipageByTwap
-                    clientOrders['slipageByTWAP'] = clientOrders.apply(
-                        lambda x: cal_twap_slipage(x['TWAP'], x['side'], x['avgPrice']), axis=1)
-                    clientOrders.loc[clientOrders.loc[:, 'cumQty'] == 0, ['slipageByTWAP']] = 0.00
-                    clientOrders['TWAP'] = round(clientOrders['TWAP'], 5)
-                    clientOrders['slipageByTWAP'] = round(clientOrders['slipageByTWAP'] * 10000, 2)
+                # 2.计算slipageByTwap
+                clientOrders['slipageByTWAP'] = clientOrders.apply(
+                    lambda x: cal_twap_slipage(x['TWAP'], x['side'], x['avgPrice']), axis=1)
+                clientOrders.loc[clientOrders.loc[:, 'cumQty'] == 0, ['slipageByTWAP']] = 0.00
+                clientOrders['TWAP'] = round(clientOrders['TWAP'], 5)
+                clientOrders['slipageByTWAP'] = round(clientOrders['slipageByTWAP'] * 10000, 2)
 
-                    # 3.计算OrderClosePx
-                    clientOrders['OCP'] = clientOrders.apply(
-                        lambda x: cal_ocp(tradingDay, x['expireTime'], x['symbol'], x['cumQty']), axis=1)
-                    clientOrders['slipageByOCP'] = clientOrders.apply(
-                        lambda x: cal_ocp_slipage(x['OCP'], x['side'], x['avgPrice']), axis=1)
-                    clientOrders['slipageByOCP'] = round(clientOrders['slipageByOCP'] * 10000, 2)
+                # 3.计算OrderClosePx
+                clientOrders['OCP'] = clientOrders.apply(
+                    lambda x: cal_ocp(tradingDay, x['expireTime'], x['symbol'], x['cumQty']), axis=1)
+                clientOrders['slipageByOCP'] = clientOrders.apply(
+                    lambda x: cal_ocp_slipage(x['OCP'], x['side'], x['avgPrice']), axis=1)
+                clientOrders['slipageByOCP'] = round(clientOrders['slipageByOCP'] * 10000, 2)
 
                 df_exchange_order = self.get_exchangeOrder(tradingday=tradingDay, clientId=clientId)
 
