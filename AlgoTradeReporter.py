@@ -212,19 +212,17 @@ class AlgoTradeReporter(object):
         else:
             if side == 'Buy' or side == 1:
                 return df_tick_symbol[
-                    (df_tick_symbol['Time'] >= startTime) & (df_tick_symbol['Time'] <= endTime) & (
-                            df_tick_symbol['Volume'] > 0) & (df_tick_symbol['Price'] <= price)]
+                    (df_tick_symbol['Time'] >= startTime) & (df_tick_symbol['Time'] <= endTime) & (df_tick_symbol['Volume'] > 0)]
             else:
                 return df_tick_symbol[
-                    (df_tick_symbol['Time'] >= startTime) & (df_tick_symbol['Time'] <= endTime) & (
-                            df_tick_symbol['Volume'] > 0) & (df_tick_symbol['Price'] >= price)]
+                    (df_tick_symbol['Time'] >= startTime) & (df_tick_symbol['Time'] <= endTime) & (df_tick_symbol['Volume'] > 0)]
 
     def get_twap(self, tradingDay, symbol, startTime=90000000, endTime=160000000, price=0, side='Buy'):
         data = self.get_tick_by_symbol(tradingDay, symbol, startTime, endTime, price, side)
         return data.Price.sum() / data.Volume.count() if data.size > 0 else 0
 
     def stat_summary(self, df, side, field):
-        df = df[df['side'] == side]
+        df = df[(df['side'] == side) & (df[field] != 0)]
         amt = sum(df['turnover'])
         if side == 'Buy':
             slipage = 0 if amt == 0 else sum((df[field] - df['avgPrice']) / df[field] * df['turnover']) / sum(
@@ -236,7 +234,9 @@ class AlgoTradeReporter(object):
         return amt, slipage, pnl_yuan
 
     def run(self, tradingDays, clientIds):
-        def cal_twap(tradingDay, effectiveTime, expireTime, symbol, price, side):
+        def cal_twap(tradingDay, effectiveTime, expireTime, symbol, price, side, cumQty):
+            if cumQty == 0:
+                return 0
             effectiveTime = effectiveTime.hour * 10000000 + effectiveTime.minute * 100000 + effectiveTime.second * 1000
             expireTime = expireTime.hour * 10000000 + expireTime.minute * 100000 + expireTime.second * 1000
             self.logger.info(f'cal_twap-{tradingDay}-{effectiveTime}-{expireTime}-{symbol}-{price}-{side}')
@@ -249,7 +249,8 @@ class AlgoTradeReporter(object):
                 (avgprice - twap) / twap if side == 'Sell' else (twap - avgprice) / twap)
             return slipageByTwap
 
-        def cal_ocp(tradingDay, expireTime, symbol):
+        def cal_ocp(tradingDay, expireTime, symbol, cumQty):
+            if cumQty == 0: return 0
             expireTime = expireTime.hour * 10000000 + expireTime.minute * 100000 + expireTime.second * 1000
             self.logger.info(f'cal_ocp-{tradingDay}-{expireTime}-{symbol}')
             tick = read_tick(symbol, tradingDay)
@@ -311,7 +312,7 @@ class AlgoTradeReporter(object):
                     # 1.计算twap
                     clientOrders['TWAP'] = clientOrders.apply(
                         lambda x: cal_twap(tradingDay, x['effectiveTime'], x['expireTime'], x['symbol'], x['avgPrice'],
-                                           x['side']), axis=1)
+                                           x['side'], x['cumQty']), axis=1)
 
                     # 2.计算slipageByTwap
                     clientOrders['slipageByTWAP'] = clientOrders.apply(
@@ -322,7 +323,7 @@ class AlgoTradeReporter(object):
 
                     # 3.计算OrderClosePx
                     clientOrders['OCP'] = clientOrders.apply(
-                        lambda x: cal_ocp(tradingDay, x['expireTime'], x['symbol']), axis=1)
+                        lambda x: cal_ocp(tradingDay, x['expireTime'], x['symbol'], x['cumQty']), axis=1)
                     clientOrders['slipageByOCP'] = clientOrders.apply(
                         lambda x: cal_ocp_slipage(x['OCP'], x['side'], x['avgPrice']), axis=1)
                     clientOrders['slipageByOCP'] = round(clientOrders['slipageByOCP'] * 10000, 2)

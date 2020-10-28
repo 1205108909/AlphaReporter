@@ -28,8 +28,6 @@ pd.set_option('display.max_rows', None)
 
 
 class AlgoSignalReporter(object):
-    dict_id_clientName = {'Cld_TRX_5001008': '富善投资', 'Cld_TRX_5001093': '泰铼投资', 'Cld_ZYZC%': '中意资产'}
-
     def __init__(self, tradingDay):
         self.logger = Log.get_logger(__name__)
         self.server = "172.10.10.7"
@@ -44,6 +42,7 @@ class AlgoSignalReporter(object):
         cfg = RawConfigParser()
         cfg.read('config.ini')
         clientIds = cfg.get('AlgoDetailReport', 'id')
+        self.dict_id_clientName = cfg.get('AlgoDetailReport', 'dict_id_clientName')
         clientIDs = list(clientIds.split(';'))
 
         self.to_receiver = cfg.get('Email', 'to_receiver')
@@ -488,7 +487,7 @@ class AlgoSignalReporter(object):
 
                 ExcelHelper.removeSheet(pathCsv, 'Sheet')
 
-                self.email.send_email_file(pathCsv, fileName, df_receive)
+                # self.email.send_email_file(pathCsv, fileName, df_receive)
                 self.logger.info(f'calculator: {tradingDay}__{clientId} successfully')
 
     def calSignalEffect(self, clientId, pathCsv, start, end, isclinet):
