@@ -19,7 +19,7 @@ import datetime
 class DataService(object):
     def __init__(self):
         cfg = ConfigParser()
-        cfg.read('config.ini')
+        cfg.read('config.ini', encoding='utf-8')
         self.source = JydbSource()
         self.month_end_tradingday = []
         self.month_end_tradingday = self.get_month_end_tradingday('20000101', datetime.datetime.now().strftime('%Y%m%d'))

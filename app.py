@@ -32,7 +32,7 @@ class App(object):
         self.email = EmailHelper.instance()
 
         cfg = RawConfigParser()
-        cfg.read('config.ini')
+        cfg.read('config.ini', encoding='utf-8')
         self.ClientID = cfg.get('AlgoTradeReport', 'id')
         self.ClientIDs = list(self.ClientID.split(';'))
         self.AccountID = cfg.get('AccountID', 'id')

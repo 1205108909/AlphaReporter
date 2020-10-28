@@ -375,7 +375,7 @@ class AlgoTradeReporter(object):
 
 if __name__ == '__main__':
     cfg = RawConfigParser()
-    cfg.read('config.ini')
+    cfg.read('config.ini', encoding='utf-8')
     clientIds = cfg.get('AlgoTradeReport', 'id')
     start = sys.argv[1]
     end = sys.argv[2]

@@ -30,7 +30,7 @@ class EmailHelper(object):
     def __init__(self):
         self.content = ''
         cfg = RawConfigParser()
-        cfg.read('config.ini')
+        cfg.read('config.ini', encoding='utf-8')
         to_receivers = cfg.get('Email', 'to_receiver')
         cc_receivers = cfg.get('Email', 'cc_receiver')
         self.receivers = list(set(to_receivers.split(';') + cc_receivers.split(';')))  # 接收邮箱

@@ -40,7 +40,7 @@ class AlgoSignalReporter(object):
         tradingdays = jyloader.get_tradingday(tradingDay, tradingDay)
 
         cfg = RawConfigParser()
-        cfg.read('config.ini')
+        cfg.read('config.ini', encoding='utf-8')
         clientIds = cfg.get('AlgoDetailReport', 'id')
         self.dict_id_clientName = cfg.get('AlgoDetailReport', 'dict_id_clientName')
         clientIDs = list(clientIds.split(';'))
@@ -294,7 +294,7 @@ class AlgoSignalReporter(object):
                 # 所有订单
                 all_clientOrders = self.get_all_clientOrder(tradingDay, clientId)
                 total_trade_num = len(all_clientOrders)
-                total_turnover = round(sum(all_clientOrders['turnover'] / 10000, 2))
+                total_turnover = round(sum(all_clientOrders['turnover'] / 10000), 2)
                 total_slipage = 0 if sum(all_clientOrders['turnover']) == 0 else round(sum(
                     all_clientOrders['slipageByVwap'] * all_clientOrders['turnover']) / sum(
                     all_clientOrders['turnover']), 2)

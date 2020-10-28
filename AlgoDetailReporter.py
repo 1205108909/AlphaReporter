@@ -69,8 +69,9 @@ class AlgoDetailReporter(object):
                     to_receiver.append(row['email'])
                     cc_receiver.append(row['repsentEmail'])
 
-        data = pd.DataFrame({'accountId': accountIds, 'clientId': clientIds, 'clientName': clientName, 'to_receiver': to_receiver,
-                             'cc_receiver': cc_receiver})
+        data = pd.DataFrame(
+            {'accountId': accountIds, 'clientId': clientIds, 'clientName': clientName, 'to_receiver': to_receiver,
+             'cc_receiver': cc_receiver})
         return data
 
     def get_all_clientOrder(self, tradingday, clientId):
@@ -308,8 +309,7 @@ class AlgoDetailReporter(object):
                     all_clientOrders['slipageByVwap'] * all_clientOrders['turnover']) / sum(
                     all_clientOrders['turnover']), 2)
 
-
-                #表1
+                # 表1
                 df_total_effect = pd.DataFrame(
                     {'clientId': clientId, '订单数': total_trade_num, '成交额(万元)': total_turnover,
                      '交易效果(bps)': total_slipage}, index=[1])
@@ -486,7 +486,7 @@ class AlgoDetailReporter(object):
 
 if __name__ == '__main__':
     cfg = RawConfigParser()
-    cfg.read('config.ini')
+    cfg.read('config.ini', encoding='utf-8')
     clientIds = cfg.get('AlgoDetailReport', 'id')
     tradingDay = sys.argv[1]
     reporter = AlgoDetailReporter(tradingDay, clientIds)

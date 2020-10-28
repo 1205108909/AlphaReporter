@@ -76,7 +76,7 @@ class JydbSource(object):
 
     def initialize(self):
         cfg = ConfigParser()
-        cfg.read('config.ini')
+        cfg.read('config.ini', encoding='utf-8')
         self.server = cfg.get('Jydb', 'server')
         self.user = cfg.get('Jydb', 'user')
         self.password = cfg.get('Jydb', 'password')
