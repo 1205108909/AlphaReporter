@@ -214,11 +214,11 @@ class AlgoTradeReporter(object):
             if side == 'Buy' or side == 1:
                 return df_tick_symbol[
                     (df_tick_symbol['Time'] >= startTime) & (df_tick_symbol['Time'] <= endTime) & (
-                                df_tick_symbol['Volume'] > 0)]
+                            df_tick_symbol['Volume'] > 0)]
             else:
                 return df_tick_symbol[
                     (df_tick_symbol['Time'] >= startTime) & (df_tick_symbol['Time'] <= endTime) & (
-                                df_tick_symbol['Volume'] > 0)]
+                            df_tick_symbol['Volume'] > 0)]
 
     def get_twap(self, tradingDay, symbol, startTime=90000000, endTime=160000000, price=0, side='Buy'):
         data = self.get_tick_by_symbol(tradingDay, symbol, startTime, endTime, price, side)
@@ -293,8 +293,6 @@ class AlgoTradeReporter(object):
                 continue
             for clientId in clientIds:
                 self.logger.info(f'start calculator: {tradingDay}__{clientId}')
-                self.email.add_email_content(f'{tradingDay}_({clientId})交易报告，请查收')
-
                 clientOrders = self.get_clientOrder(tradingDay, clientId)
                 if clientOrders.size == 0:
                     continue
@@ -360,6 +358,8 @@ class AlgoTradeReporter(object):
 
                 df_receive = self.get_receiveList(clientId)
                 df_receive['tradingDay'] = tradingDay
+
+                self.email.add_email_content(f'{tradingDay}_({clientId})交易报告，请查收')
                 fileName = f'{tradingDay}_({clientId})_AlgoTradeReporter.xlsx'
                 pathCsv = os.path.join(f'Data/{fileName}')
 
@@ -373,6 +373,7 @@ class AlgoTradeReporter(object):
                 ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=df_exchange_order,
                                                header=True, sheet_name='algoExchangeOrder', sep_key='all_name')
                 ExcelHelper.removeSheet(pathCsv, 'Sheet')
+
                 self.email.send_email_file(pathCsv, fileName, df_receive)
                 self.logger.info(f'calculator: {tradingDay}__{clientId} successfully')
 
