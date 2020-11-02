@@ -4,7 +4,7 @@
 """
 @Author : wangzhaoyun
 @Contact:1205108909@qq.com
-@File : AlgoSignalReporter.py 
+@File : AlphaReporter.py
 @Time : 2020/10/26 11:27 
 """
 
@@ -27,7 +27,7 @@ pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
 
 
-class AlgoSignalReporter(object):
+class AlphaReporter(object):
     def __init__(self, tradingDay):
         self.logger = Log.get_logger(__name__)
         self.server = "172.10.10.7"
@@ -42,7 +42,6 @@ class AlgoSignalReporter(object):
         cfg = RawConfigParser()
         cfg.read('config.ini', encoding='utf-8')
         clientIds = cfg.get('AlgoDetailReport', 'id')
-        self.dict_id_clientName = cfg.get('AlgoDetailReport', 'dict_id_clientName')
         clientIDs = list(clientIds.split(';'))
 
         self.to_receiver = cfg.get('Email', 'to_receiver')
@@ -446,10 +445,10 @@ class AlgoSignalReporter(object):
                 df_effect_by_side.columns = ['时段', '方向', '交易额(万元)', '交易效果(bps)']
 
                 df_receive = pd.DataFrame({'to_receiver': self.to_receiver, 'cc_receiver': self.cc_receiver,
-                                           'clientName': self.dict_id_clientName[clientId], 'clientId': clientId},
+                                           'clientName': Constants.dict_id_clientName[clientId], 'clientId': clientId},
                                           index=[1])
                 df_receive['tradingDay'] = tradingDay
-                fileName = f'{tradingDay}_({clientId})_AlgoSignalReporter.xlsx'
+                fileName = f'AlphaReporter_{tradingDay}_({clientId}).xlsx'
                 pathCsv = os.path.join(f'Data/{fileName}')
 
                 ExcelHelper.createExcel(pathCsv)
@@ -487,7 +486,7 @@ class AlgoSignalReporter(object):
 
                 ExcelHelper.removeSheet(pathCsv, 'Sheet')
 
-                # self.email.send_email_file(pathCsv, fileName, df_receive)
+                self.email.send_email_file(pathCsv, fileName, df_receive, subject_prefix='AlphaReporter')
                 self.logger.info(f'calculator: {tradingDay}__{clientId} successfully')
 
     def calSignalEffect(self, clientId, pathCsv, start, end, isclinet):
@@ -640,4 +639,4 @@ class AlgoSignalReporter(object):
 
 if __name__ == '__main__':
     tradingDay = sys.argv[1]
-    reporter = AlgoSignalReporter(tradingDay)
+    reporter = AlphaReporter(tradingDay)

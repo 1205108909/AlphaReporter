@@ -104,7 +104,7 @@ class EmailHelper(object):
             print(e)
             print("Error: 无法发送邮件")
 
-    def send_email_file(self, file_path, file_name, df_receive, is_clear_content=True):
+    def send_email_file(self, file_path, file_name, df_receive, is_clear_content=True, subject_prefix='算法交易报告'):
         """
         发送带文件的邮件
         :param file_path:邮件路径
@@ -121,7 +121,7 @@ class EmailHelper(object):
         clientName = df_receive.iloc[0, :]['clientName']
         clientId = df_receive.iloc[0, :]['clientId']
         tradingDay = df_receive.iloc[0, :]['tradingDay']
-        subject = f'算法交易报告:{clientName}({clientId})_{tradingDay}'
+        subject = f'{subject_prefix}:{clientName}({clientId})_{tradingDay}'
         # 创建一个带附件的实例
         message = MIMEMultipart()
         message['From'] = self.sender

@@ -300,7 +300,7 @@ class AlgoDetailReporter(object):
         for tradingDay in tradingDays:
             for clientId in clientIds:
                 self.logger.info(f'start calculator: {tradingDay}__{clientId}')
-                self.email.add_email_content(f'{tradingDay}_({clientId})统计报告，请查收')
+                self.email.add_email_content(f'AlphaReporter_{tradingDay}_({clientId})统计报告，请查收')
 
                 all_clientOrders = self.get_all_clientOrder(tradingDay, clientId)
                 total_trade_num = len(all_clientOrders)
@@ -453,7 +453,7 @@ class AlgoDetailReporter(object):
 
                 df_receive = self.get_receiveList(clientId)
                 df_receive['tradingDay'] = tradingDay
-                fileName = f'{tradingDay}_({clientId})_AlgoDetailReporter.xlsx'
+                fileName = f'AlphaReporter_{tradingDay}_({clientId}).xlsx'
                 pathCsv = os.path.join(f'Data/{fileName}')
 
                 ExcelHelper.createExcel(pathCsv)
@@ -480,7 +480,7 @@ class AlgoDetailReporter(object):
                                                interval=3, sheet_name=clientId)
 
                 ExcelHelper.removeSheet(pathCsv, 'Sheet')
-                self.email.send_email_file(pathCsv, fileName, df_receive)
+                self.email.send_email_file(pathCsv, fileName, df_receive, subject_prefix='AlphaReporter')
                 self.logger.info(f'calculator: {tradingDay}__{clientId} successfully')
 
 

@@ -18,7 +18,7 @@ pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
 
 
-class AlgoTradeReporter(object):
+class OrderReporter(object):
     def __init__(self, start, end, clientIds):
         self.logger = Log.get_logger(__name__)
         self.tick_path = "Y:/Data/h5data/stock/tick/"
@@ -359,8 +359,8 @@ class AlgoTradeReporter(object):
                 df_receive = self.get_receiveList(clientId)
                 df_receive['tradingDay'] = tradingDay
 
-                self.email.add_email_content(f'{tradingDay}_({clientId})交易报告，请查收')
-                fileName = f'{tradingDay}_({clientId})_AlgoTradeReporter.xlsx'
+                self.email.add_email_content(f'ClientOrderReporter_{tradingDay}_({clientId})交易报告，请查收')
+                fileName = f'OrderReporter_{tradingDay}_({clientId}).xlsx'
                 pathCsv = os.path.join(f'Data/{fileName}')
 
                 ExcelHelper.createExcel(pathCsv)
@@ -374,7 +374,7 @@ class AlgoTradeReporter(object):
                                                header=True, sheet_name='algoExchangeOrder', sep_key='all_name')
                 ExcelHelper.removeSheet(pathCsv, 'Sheet')
 
-                self.email.send_email_file(pathCsv, fileName, df_receive)
+                self.email.send_email_file(pathCsv, fileName, df_receive, subject_prefix='OrderReporter')
                 self.logger.info(f'calculator: {tradingDay}__{clientId} successfully')
 
 
@@ -384,4 +384,4 @@ if __name__ == '__main__':
     clientIds = cfg.get('AlgoTradeReport', 'id')
     start = sys.argv[1]
     end = sys.argv[2]
-    reporter = AlgoTradeReporter(start, end, clientIds)
+    reporter = OrderReporter(start, end, clientIds)
