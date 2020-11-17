@@ -115,6 +115,8 @@ class EmailHelper(object):
         if len(self.content) == 0:
             return
         if df_receive.shape[0] == 0:
+            if is_clear_content:
+                self.content = ''
             return
         to_receiver = df_receive.iloc[0, :]['to_receiver'].split(';')
         cc_receiver = df_receive.iloc[0, :]['cc_receiver'].split(';')
@@ -150,6 +152,8 @@ class EmailHelper(object):
                 self.content = ''
         except smtplib.SMTPException as e:
             print(e)
+            if is_clear_content:
+                self.content = ''
             print("Error: 无法发送邮件")
 
 
