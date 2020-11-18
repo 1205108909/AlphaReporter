@@ -61,6 +61,7 @@ class App(object):
             self.calSignalEffect(accountId, pathCsv, end, start, 1)
         ExcelHelper.removeSheet(pathCsv, 'Sheet')
         self.email.sendEmail(pathCsv, fileName, start, end)
+        self.email.content = ''
 
     def calSignalEffect(self, clientId, pathCsv, start, end, isclinet):
         # 1.信号效果

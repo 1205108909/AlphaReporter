@@ -104,19 +104,16 @@ class EmailHelper(object):
             print(e)
             print("Error: 无法发送邮件")
 
-    def send_email_file(self, file_path, file_name, df_receive, is_clear_content=True, subject_prefix='算法交易报告'):
+    def send_email_file(self, file_path, file_name, df_receive, subject_prefix='算法交易报告'):
         """
         发送带文件的邮件
         :param file_path:邮件路径
         :param file_name:邮件中文件名称
         :param subject:邮件主题
-        :param is_clear_content: 发送邮件后是否删除content，如果邮件独立True，如果邮件与邮件之间是追加关系则False
         """
         if len(self.content) == 0:
             return
         if df_receive.shape[0] == 0:
-            if is_clear_content:
-                self.content = ''
             return
         to_receiver = df_receive.iloc[0, :]['to_receiver'].split(';')
         cc_receiver = df_receive.iloc[0, :]['cc_receiver'].split(';')
@@ -148,12 +145,8 @@ class EmailHelper(object):
             smtpObj.login(self.sender, self.pwd)
             # smtpObj.sendmail(self.sender, self.receivers, message.as_string())
             print("邮件发送成功")
-            if is_clear_content:
-                self.content = ''
         except smtplib.SMTPException as e:
             print(e)
-            if is_clear_content:
-                self.content = ''
             print("Error: 无法发送邮件")
 
 

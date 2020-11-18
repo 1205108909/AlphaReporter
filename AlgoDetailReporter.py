@@ -481,6 +481,7 @@ class AlgoDetailReporter(object):
 
                 ExcelHelper.removeSheet(pathCsv, 'Sheet')
                 self.email.send_email_file(pathCsv, fileName, df_receive, subject_prefix='AlphaReporter')
+                self.email.content = ''
                 self.logger.info(f'calculator: {tradingDay}__{clientId} successfully')
 
 
