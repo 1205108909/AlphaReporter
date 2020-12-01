@@ -402,7 +402,7 @@ class AlphaReporter(object):
                         'turnover']) / sum(df_client_exchange_order_sz_first1['turnover']) * 10000, 2))  # 深圳同向首次信号交易效果
 
                 # 表2
-                list_summary = ['交易额(万元)', '订单数', '交易效果', '信号交易额(万元)', '信号交易效果', '非信号交易额(万元)', '非信号交易效果',
+                list_summary = ['交易额(万元)', '订单数', '交易效果', '信号母单交易额(万元)', '信号母单交易效果', '非信号交易额(万元)', '非信号交易效果',
                                 '同向信号交易效果', '反向信号交易效果', '同向首次信号交易效果']
                 df_market_effect = pd.DataFrame({'指标': list_summary, 'SZ': list_sz, 'SH': list_sh})
 
@@ -412,12 +412,12 @@ class AlphaReporter(object):
                 df_sh_amt_bps_signal = self.df_stat_bs_amt_bps(
                     df_client_exchange_order_sh[
                         df_client_exchange_order_sh['signalType'] != 'Normal'])  # 分买卖上海信号单成交额与效果
-                df_sh_amt_bps_signal.columns = ['方向', '上海信号单成交额(万元)', '效果(bps)']
+                df_sh_amt_bps_signal.columns = ['方向', '上海信号子单成交额(万元)', '效果(bps)']
 
                 df_sh_amt_bps_notsignal = self.df_stat_bs_amt_bps(
                     df_client_exchange_order_sh[
                         df_client_exchange_order_sh['signalType'] == 'Normal'])  # 分买卖上海非信号单成交额与效果
-                df_sh_amt_bps_notsignal.columns = ['方向', '上海非信号单成交额(万元)', '效果(bps)']
+                df_sh_amt_bps_notsignal.columns = ['方向', '上海非信号子单成交额(万元)', '效果(bps)']
 
                 df_sz_amt_bps = self.df_stat_bs_amt_bps(df_client_exchange_order_sz)  # 分买卖深圳订单成交额与效果
                 df_sz_amt_bps.columns = ['方向', '深圳总成交金额(万元)', '效果(bps)']
@@ -425,12 +425,12 @@ class AlphaReporter(object):
                 df_sz_amt_bps_signal = self.df_stat_bs_amt_bps(
                     df_client_exchange_order_sz[
                         df_client_exchange_order_sz['signalType'] != 'Normal'])  # 分买卖深圳信号单成交额与效果
-                df_sz_amt_bps_signal.columns = ['方向', '深圳信号单成交额(万元)', '效果(bps)']
+                df_sz_amt_bps_signal.columns = ['方向', '深圳信号子单成交额(万元)', '效果(bps)']
 
                 df_sz_amt_bps_notsignal = self.df_stat_bs_amt_bps(
                     df_client_exchange_order_sz[
                         df_client_exchange_order_sz['signalType'] == 'Normal'])  # 分买卖深圳非信号单成交额与效果
-                df_sz_amt_bps_notsignal.columns = ['方向', '深圳非信号单成交额(万元)', '效果(bps)']
+                df_sz_amt_bps_notsignal.columns = ['方向', '深圳非信号子单成交额(万元)', '效果(bps)']
 
                 dict_signal_to_bool = {'Normal': '否', 'Signal': '是'}
                 df_effect_by_signal = self.stat_effect_by_signal(tradingDay=tradingDay, clientId=clientId)
