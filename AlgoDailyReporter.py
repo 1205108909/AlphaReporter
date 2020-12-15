@@ -50,12 +50,11 @@ class AlgoDailyReporter(object):
         self.run(tradingdays, clientIDs)
 
     def get_connection(self):
-        for i in range(3):
-            try:
-                self.conn = pymssql.connect(self.server, self.user, self.password, self.database)
-                return self.conn
-            except pymssql.OperationalError as e:
-                print(e)
+        try:
+            self.conn = pymssql.connect(self.server, self.user, self.password, self.database)
+            return self.conn
+        except pymssql.OperationalError as e:
+            print(e)
 
     def get_all_clientOrder(self, tradingday, clientId):
         """
@@ -218,7 +217,7 @@ class AlgoDailyReporter(object):
         signalType = []
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
-                stmt = f"SELECT a.accountId,a.orderId,	a.symbol,	a.tradingDay,	a.side,	b.alphaPrice,	b.cumQty,	a.exDestination AS exDestination,	a.effectiveTime,	a.expireTime,	a.avgPrice,	(CASE	WHEN a.side = 1 THEN (a.iVWP - b.alphaPrice) / a.iVWP	ELSE (b.alphaPrice - a.iVWP) / a.iVWP	END) AS delta,b.signalType FROM	(SELECT accountId, orderId, tradingDay, side, avgPrice, symbol, exDestination, effectiveTime,expireTime,iVWP	FROM ClientOrder WHERE	clientId = \'{clientId}\') a JOIN (SELECT	orderId,	SUM (cumQty * sliceAvgPrice) / (CASE WHEN SUM (cumQty) > 0 THEN	SUM (cumQty) ELSE	NULL END) AS alphaPrice,SUM (cumQty) AS cumQty,	CASE WHEN (TEXT LIKE '%Sell%LongHolding%' OR TEXT LIKE '%Buy%ShortHolding%'	) THEN 'Reverse' WHEN ( TEXT LIKE '%Buy%LongHolding%' OR TEXT LIKE '%Sell%ShortHolding%' ) THEN 'Forward'	WHEN (TEXT LIKE '%ToNormal%') THEN		'Close'	WHEN decisionType = '22' THEN		'First1'	ELSE		'Normal'	END AS signalType	FROM ExchangeOrder	WHERE		cumQty > 0	GROUP BY		orderId,		CASE	WHEN (		TEXT LIKE '%Sell%LongHolding%'		OR TEXT LIKE '%Buy%ShortHolding%'	) THEN		'Reverse'	WHEN (		TEXT LIKE '%Buy%LongHolding%'	OR TEXT LIKE '%Sell%ShortHolding%') THEN 'Forward' WHEN (TEXT LIKE '%ToNormal%') THEN	'Close'	WHEN decisionType = '22' THEN	'First1' ELSE	'Normal'	END) b ON a.orderId = b.orderId AND a.tradingDay = \'{tradingDay}\'"
+                stmt = f"SELECT a.accountId,a.orderId,	a.symbol,	a.tradingDay,	a.side,	b.alphaPrice,	b.cumQty,	a.exDestination AS exDestination,	a.effectiveTime,	a.expireTime,	a.avgPrice,	(CASE	WHEN a.side = 1 THEN (a.iVWP - b.alphaPrice) / a.iVWP *10000  ELSE (b.alphaPrice - a.iVWP) / a.iVWP *10000	END) AS delta,b.signalType FROM	(SELECT accountId, orderId, tradingDay, side, avgPrice, symbol, exDestination, effectiveTime,expireTime,iVWP	FROM ClientOrder WHERE	clientId = \'{clientId}\') a JOIN (SELECT	orderId,	SUM (cumQty * sliceAvgPrice) / (CASE WHEN SUM (cumQty) > 0 THEN	SUM (cumQty) ELSE	NULL END) AS alphaPrice,SUM (cumQty) AS cumQty,	CASE WHEN (TEXT LIKE '%Sell%LongHolding%' OR TEXT LIKE '%Buy%ShortHolding%'	) THEN 'Reverse' WHEN ( TEXT LIKE '%Buy%LongHolding%' OR TEXT LIKE '%Sell%ShortHolding%' ) THEN 'Forward'	WHEN (TEXT LIKE '%ToNormal%') THEN		'Close'	WHEN decisionType = '22' THEN		'First1'	ELSE		'Normal'	END AS signalType	FROM ExchangeOrder	WHERE		cumQty > 0	GROUP BY		orderId,		CASE	WHEN (		TEXT LIKE '%Sell%LongHolding%'		OR TEXT LIKE '%Buy%ShortHolding%'	) THEN		'Reverse'	WHEN (		TEXT LIKE '%Buy%LongHolding%'	OR TEXT LIKE '%Sell%ShortHolding%') THEN 'Forward' WHEN (TEXT LIKE '%ToNormal%') THEN	'Close'	WHEN decisionType = '22' THEN	'First1' ELSE	'Normal'	END) b ON a.orderId = b.orderId AND a.tradingDay = \'{tradingDay}\'"
                 cursor.execute(stmt)
                 for row in cursor:
                     accountIds.append(row['accountId'])
@@ -302,7 +301,7 @@ class AlgoDailyReporter(object):
             avgprice = np.float64(avgprice)
             slipageByTwap = 0.00 if twap == 0.00 else (
                 (avgprice - twap) / twap if side == 'Sell' else (twap - avgprice) / twap)
-            return slipageByTwap
+            return slipageByTwap * 10000
 
         for tradingDay in tradingDays:
             for clientId in clientIds:
