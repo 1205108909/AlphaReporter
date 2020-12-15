@@ -41,7 +41,7 @@ class AlphaReporter(object):
 
         cfg = RawConfigParser()
         cfg.read('config.ini', encoding='utf-8')
-        clientIds = cfg.get('AlgoDetailReport', 'id')
+        clientIds = cfg.get('AlphaReporter', 'id')
         clientIDs = list(clientIds.split(';'))
 
         self.to_receiver = cfg.get('Email', 'to_receiver')
@@ -486,7 +486,7 @@ class AlphaReporter(object):
 
                 ExcelHelper.removeSheet(pathCsv, 'Sheet')
 
-                self.email.send_email_file(pathCsv, fileName, df_receive, subject_prefix='AlphaReporter')
+                # self.email.send_email_file(pathCsv, fileName, df_receive, subject_prefix='AlphaReporter')
                 self.email.content = ''
                 self.logger.info(f'calculator: {tradingDay}__{clientId} successfully')
 

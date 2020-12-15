@@ -382,7 +382,7 @@ class OrderReporter(object):
 if __name__ == '__main__':
     cfg = RawConfigParser()
     cfg.read('config.ini', encoding='utf-8')
-    clientIds = cfg.get('AlgoTradeReport', 'id')
+    clientIds = cfg.get('OrderReporter', 'id')
     start = sys.argv[1]
     end = sys.argv[2]
     reporter = OrderReporter(start, end, clientIds)
