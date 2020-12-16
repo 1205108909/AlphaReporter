@@ -36,12 +36,11 @@ class OrderReporter(object):
         self.run(tradingdays, clientIDs)
 
     def get_connection(self):
-        for i in range(3):
-            try:
-                self.conn = pymssql.connect(self.server, self.user, self.password, self.database)
-                return self.conn
-            except pymssql.OperationalError as e:
-                print(e)
+        try:
+            self.conn = pymssql.connect(self.server, self.user, self.password, self.database)
+            return self.conn
+        except pymssql.OperationalError as e:
+            print(e)
 
     def get_receiveList(self, clientId):
         accountIds = []

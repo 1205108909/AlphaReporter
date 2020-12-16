@@ -32,12 +32,11 @@ class JydbSource(object):
         self.logger = Log.get_logger(__name__)
 
     def get_connection(self):
-        for i in range(3):
-            try:
-                self.conn = pymssql.connect(self.server, self.user, self.password, self.database)
-                return self.conn
-            except pymssql.OperationalError as e:
-                self.logger.error(e)
+        try:
+            self.conn = pymssql.connect(self.server, self.user, self.password, self.database)
+            return self.conn
+        except pymssql.OperationalError as e:
+            self.logger.error(e)
 
     def get_tradingday(self, start, end):
         """

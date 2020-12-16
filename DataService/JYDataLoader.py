@@ -41,12 +41,11 @@ class JYDataLoader:
         self.earliestDay = '19900101'
 
     def get_connection(self):
-        for i in range(3):
-            try:
-                self.conn = pymssql.connect(self.server, self.user, self.password, self.database)
-                return self.conn
-            except pymssql.OperationalError as e:
-                print(e)
+        try:
+            self.conn = pymssql.connect(self.server, self.user, self.password, self.database)
+            return self.conn
+        except pymssql.OperationalError as e:
+            print(e)
 
     def getTradableList(self, tradingDay):
         mdSymbols = []

@@ -28,7 +28,7 @@ pd.set_option('display.max_rows', None)
 
 
 class AlgoDailyReporter(object):
-    def __init__(self, tradingDay):
+    def __init__(self, start, end):
         self.logger = Log.get_logger(__name__)
         self.server = "172.10.10.7"
         self.database = "AlgoTradeReport"
@@ -41,7 +41,7 @@ class AlgoDailyReporter(object):
         self.conn = None
 
         jyloader = JYDataLoader()
-        tradingdays = jyloader.get_tradingday(tradingDay, tradingDay)
+        tradingdays = jyloader.get_tradingday(start, end)
 
         cfg = RawConfigParser()
         cfg.read('config.ini', encoding='utf-8')
@@ -308,6 +308,8 @@ class AlgoDailyReporter(object):
                 self.logger.info(f'start calculator: {tradingDay}__{clientId}')
                 # 1.所有订单
                 all_clientOrders = self.get_all_clientOrder(tradingDay, clientId)
+                if all_clientOrders.shape[0] == 0:
+                    continue
                 all_clientOrders['TWAP'] = all_clientOrders.apply(
                     lambda x: cal_twap(tradingDay, x['effectiveTime'], x['expireTime'], x['symbol'], x['avgprice'],
                                        x['side'], x['cumQty']), axis=1)
@@ -337,10 +339,12 @@ class AlgoDailyReporter(object):
                 series_turnover = all_clientOrders_group['turnover'].sum()
                 series_turnover.rename('turnover', inplace=True)
                 series_vwapbps = all_clientOrders_group.apply(
-                    lambda x: sum(x['turnover'] * x['slipageByVwap']) / sum(x['turnover']))
+                    lambda x: 0 if sum(x['turnover']) == 0 else sum(x['turnover'] * x['slipageByVwap']) / sum(
+                        x['turnover']))
                 series_vwapbps.rename('VWAPBps', inplace=True)
                 series_twapbps = all_clientOrders_group.apply(
-                    lambda x: sum(x['turnover'] * x['slipageByTwap']) / sum(x['turnover']))
+                    lambda x: 0 if sum(x['turnover']) == 0 else sum(x['turnover'] * x['slipageByTwap']) / sum(
+                        x['turnover']))
                 series_twapbps.rename('TWAPBps', inplace=True)
 
                 # 6.信号单分组计算VWAPBps,TWAPBps
@@ -420,8 +424,12 @@ class AlgoDailyReporter(object):
         else:
             df_group = df.groupby(['accountId', 'exDestination', 'side'])
             series_turnover = df_group['turnover'].sum()
-            series_vwapbps = df_group.apply(lambda x: sum(x['turnover'] * x['slipageByVwap']) / sum(x['turnover']))
-            series_twapbps = df_group.apply(lambda x: sum(x['turnover'] * x['slipageByTwap']) / sum(x['turnover']))
+            series_vwapbps = df_group.apply(
+                lambda x: 0 if sum(x['turnover']) == 0 else sum(x['turnover'] * x['slipageByVwap']) / sum(
+                    x['turnover']))
+            series_twapbps = df_group.apply(
+                lambda x: 0 if sum(x['turnover']) == 0 else sum(x['turnover'] * x['slipageByTwap']) / sum(
+                    x['turnover']))
             return series_turnover, series_vwapbps, series_twapbps
 
     def Insert_Table(self, df, tablename):
@@ -448,5 +456,6 @@ class AlgoDailyReporter(object):
 
 
 if __name__ == '__main__':
-    tradingDay = sys.argv[1]
-    reporter = AlgoDailyReporter(tradingDay)
+    start = sys.argv[1]
+    end = sys.argv[2]
+    reporter = AlgoDailyReporter(start, end)
