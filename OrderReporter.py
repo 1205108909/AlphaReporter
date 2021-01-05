@@ -17,9 +17,16 @@ pd.set_option('display.max_columns', None)
 # 显示所有行
 pd.set_option('display.max_rows', None)
 
+from enum import Enum
+
+
+class IdType(Enum):
+    clientId = 1
+    accountId = 2
+
 
 class OrderReporter(object):
-    def __init__(self, start, end, clientIds):
+    def __init__(self, start, end, clientIds, accountIds):
         self.logger = Log.get_logger(__name__)
         self.tick_path = "Y:/Data/h5data/stock/tick/"
         self.server = "172.10.10.7"
@@ -31,9 +38,10 @@ class OrderReporter(object):
         jyloader = JYDataLoader()
         tradingdays = jyloader.get_tradingday(start, end)
         clientIDs = list(clientIds.split(';'))
+        accountIDs = list(accountIds.split(';'))
         self.email = EmailHelper.instance()
-
-        self.run(tradingdays, clientIDs)
+        all_ids = {IdType.clientId: clientIDs, IdType.accountId: accountIDs}
+        self.run(tradingdays, all_ids)
 
     def get_connection(self):
         try:
@@ -42,16 +50,18 @@ class OrderReporter(object):
         except pymssql.OperationalError as e:
             print(e)
 
-    def get_receiveList(self, clientId):
+    def get_receiveList(self, id_type, id):
         accountIds = []
         clientIds = []
         clientName = []
         to_receiver = []
         cc_receiver = []
-
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
-                stmt = f"select * from Clients where clientId = \'{clientId}\'"
+                if id_type == IdType.clientId:
+                    stmt = f"select * from Clients where clientId = \'{id}\'"
+                else:
+                    stmt = f"select * from Clients where accountId = \'{id}\'"
                 cursor.execute(stmt)
                 for row in cursor:
                     accountIds.append(row['accountId'])
@@ -65,7 +75,7 @@ class OrderReporter(object):
              'cc_receiver': cc_receiver})
         return data
 
-    def get_clientOrder(self, tradingday, clientId):
+    def get_clientOrder(self, tradingday, id_type, id):
         """
         get_clientOrder
         :param start: '20150101'
@@ -86,7 +96,10 @@ class OrderReporter(object):
         VWAP = []
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
-                stmt = f"select * from ClientOrderView where orderQty>0 and (securityType='RPO' or securityType='EQA') and tradingDay = \'{tradingday}\' and clientId like \'{clientId}\'"
+                if id_type == IdType.clientId:
+                    stmt = f"select * from ClientOrderView where orderQty>0 and (securityType='RPO' or securityType='EQA') and tradingDay = \'{tradingday}\' and clientId like \'{id}\'"
+                else:
+                    stmt = f"select * from ClientOrderView where orderQty>0 and (securityType='RPO' or securityType='EQA') and tradingDay = \'{tradingday}\' and accountId like \'{id}\'"
                 cursor.execute(stmt)
                 for row in cursor:
                     orderId.append(row['orderId'])
@@ -113,14 +126,17 @@ class OrderReporter(object):
         data['turnover'] = data['avgPrice'] * data['cumQty']
         return data
 
-    def get_client_order_count(self, tradingday, clientId):
+    def get_client_order_count(self, tradingday, id_type, id):
         orderId = []
         sliceStatus = []
         sliceCount = []
 
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
-                stmt = f"SELECT a.orderId, sliceStatus, sliceCount FROM ClientOrderView a JOIN (SELECT orderId,orderStatus AS sliceStatus,COUNT (*) AS sliceCount FROM ExchangeOrderView WHERE orderStatus IN ('Filled', 'Canceled') GROUP BY orderId,orderStatus) b ON a.orderId = b.orderId WHERE a.tradingDay = \'{tradingday}\' AND a.clientId like \'{clientId}\' ORDER BY a.orderId"
+                if id_type == IdType.clientId:
+                    stmt = f"SELECT a.orderId, sliceStatus, sliceCount FROM ClientOrderView a JOIN (SELECT orderId,orderStatus AS sliceStatus,COUNT (*) AS sliceCount FROM ExchangeOrderView WHERE orderStatus IN ('Filled', 'Canceled') GROUP BY orderId,orderStatus) b ON a.orderId = b.orderId WHERE a.tradingDay = \'{tradingday}\' AND a.clientId like \'{id}\' ORDER BY a.orderId"
+                else:
+                    stmt = f"SELECT a.orderId, sliceStatus, sliceCount FROM ClientOrderView a JOIN (SELECT orderId,orderStatus AS sliceStatus,COUNT (*) AS sliceCount FROM ExchangeOrderView WHERE orderStatus IN ('Filled', 'Canceled') GROUP BY orderId,orderStatus) b ON a.orderId = b.orderId WHERE a.tradingDay = \'{tradingday}\' AND a.accountId like \'{id}\' ORDER BY a.orderId"
                 cursor.execute(stmt)
                 for row in cursor:
                     orderId.append(row['orderId'])
@@ -131,7 +147,7 @@ class OrderReporter(object):
         data['sliceCount'] = data['sliceCount'].astype('int')
         return data
 
-    def get_exchangeOrder(self, tradingday, clientId):
+    def get_exchangeOrder(self, tradingday, id_type, id):
         """
         get_clientOrder
         :param start: '20150101'
@@ -151,7 +167,10 @@ class OrderReporter(object):
         orderStatus = []
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
-                stmt = f"SELECT a.sliceId, a.orderId, b.side,b.symbol,a.effectiveTime,a.qty,a.cumQty,a.leavesQty,a.price,a.sliceAvgPrice,a.orderStatus from ExchangeOrderView a join ClientOrderView b on a.orderId=b.orderId where a.orderStatus in ('Filled','Canceled') AND b.tradingDay = \'{tradingday}\' AND b.clientId like \'{clientId}\'"
+                if id_type == IdType.clientId:
+                    stmt = f"SELECT a.sliceId, a.orderId, b.side,b.symbol,a.effectiveTime,a.qty,a.cumQty,a.leavesQty,a.price,a.sliceAvgPrice,a.orderStatus from ExchangeOrderView a join ClientOrderView b on a.orderId=b.orderId where a.orderStatus in ('Filled','Canceled') AND b.tradingDay = \'{tradingday}\' AND b.clientId like \'{id}\'"
+                else:
+                    stmt = f"SELECT a.sliceId, a.orderId, b.side,b.symbol,a.effectiveTime,a.qty,a.cumQty,a.leavesQty,a.price,a.sliceAvgPrice,a.orderStatus from ExchangeOrderView a join ClientOrderView b on a.orderId=b.orderId where a.orderStatus in ('Filled','Canceled') AND b.tradingDay = \'{tradingday}\' AND b.accountId like \'{id}\'"
                 cursor.execute(stmt)
                 for row in cursor:
                     sliceId.append(row['sliceId'])
@@ -235,7 +254,7 @@ class OrderReporter(object):
         pnl_yuan = slipage * amt
         return amt, slipage, pnl_yuan
 
-    def run(self, tradingDays, clientIds):
+    def run(self, tradingDays, dict_ids):
         def cal_twap(tradingDay, effectiveTime, expireTime, symbol, price, side, cumQty):
             if cumQty == 0:
                 return 0
@@ -290,98 +309,102 @@ class OrderReporter(object):
             if not os.path.exists(os.path.join(self.tick_path, tradingDay + '.h5')):
                 self.logger.error(f'{tradingDay} h5 tick is not existed.')
                 continue
-            for clientId in clientIds:
-                self.logger.info(f'start calculator: {tradingDay}__{clientId}')
-                clientOrders = self.get_clientOrder(tradingDay, clientId)
-                if clientOrders.size == 0:
-                    continue
-                df_client_order_count = self.get_client_order_count(tradingDay, clientId)
-                df_client_order_count['sliceStatus'] = df_client_order_count['sliceStatus'].map(lambda x: x + 'Count')
-                df_client_order_count = df_client_order_count.pivot(index='orderId', columns='sliceStatus',
-                                                                    values='sliceCount')
-                clientOrders = clientOrders.merge(df_client_order_count, how='left', left_on='orderId',
-                                                  right_index=True)
-                clientOrders.fillna(0, inplace=True)
-                clientOrders.sort_values(by=['effectiveTime'], inplace=True)
+            for id_type, ids in dict_ids.items():
+                for id in ids:
+                    self.logger.info(f'start calculator: {tradingDay}__{id_type}__{id}')
+                    clientOrders = self.get_clientOrder(tradingDay, id_type, id)
+                    if clientOrders.size == 0:
+                        continue
+                    df_client_order_count = self.get_client_order_count(tradingDay, id_type, id)
+                    df_client_order_count['sliceStatus'] = df_client_order_count['sliceStatus'].map(
+                        lambda x: x + 'Count')
+                    df_client_order_count = df_client_order_count.pivot(index='orderId', columns='sliceStatus',
+                                                                        values='sliceCount')
+                    clientOrders = clientOrders.merge(df_client_order_count, how='left', left_on='orderId',
+                                                      right_index=True)
+                    clientOrders.fillna(0, inplace=True)
+                    clientOrders.sort_values(by=['effectiveTime'], inplace=True)
 
-                # 调整列顺序
-                VWAPs = clientOrders.pop('VWAP')
-                clientOrders.insert(clientOrders.shape[1], 'VWAP', VWAPs)
-                slipageByVWAPs = clientOrders.pop('slipageByVWAP')
-                clientOrders.insert(clientOrders.shape[1], 'slipageByVWAP', slipageByVWAPs)
+                    # 调整列顺序
+                    VWAPs = clientOrders.pop('VWAP')
+                    clientOrders.insert(clientOrders.shape[1], 'VWAP', VWAPs)
+                    slipageByVWAPs = clientOrders.pop('slipageByVWAP')
+                    clientOrders.insert(clientOrders.shape[1], 'slipageByVWAP', slipageByVWAPs)
 
-                # 1.计算twap
-                clientOrders['TWAP'] = clientOrders.apply(
-                    lambda x: cal_twap(tradingDay, x['effectiveTime'], x['expireTime'], x['symbol'], x['avgPrice'],
-                                       x['side'], x['cumQty']), axis=1)
+                    # 1.计算twap
+                    clientOrders['TWAP'] = clientOrders.apply(
+                        lambda x: cal_twap(tradingDay, x['effectiveTime'], x['expireTime'], x['symbol'], x['avgPrice'],
+                                           x['side'], x['cumQty']), axis=1)
 
-                # 2.计算slipageByTwap
-                clientOrders['slipageByTWAP'] = clientOrders.apply(
-                    lambda x: cal_twap_slipage(x['TWAP'], x['side'], x['avgPrice']), axis=1)
-                clientOrders.loc[clientOrders.loc[:, 'cumQty'] == 0, ['slipageByTWAP']] = 0.00
-                clientOrders['TWAP'] = round(clientOrders['TWAP'], 5)
-                clientOrders['slipageByTWAP'] = round(clientOrders['slipageByTWAP'] * 10000, 2)
+                    # 2.计算slipageByTwap
+                    clientOrders['slipageByTWAP'] = clientOrders.apply(
+                        lambda x: cal_twap_slipage(x['TWAP'], x['side'], x['avgPrice']), axis=1)
+                    clientOrders.loc[clientOrders.loc[:, 'cumQty'] == 0, ['slipageByTWAP']] = 0.00
+                    clientOrders['TWAP'] = round(clientOrders['TWAP'], 5)
+                    clientOrders['slipageByTWAP'] = round(clientOrders['slipageByTWAP'] * 10000, 2)
 
-                # 3.计算OrderClosePx
-                clientOrders['OCP'] = clientOrders.apply(
-                    lambda x: cal_ocp(tradingDay, x['expireTime'], x['symbol'], x['cumQty']), axis=1)
-                clientOrders['slipageByOCP'] = clientOrders.apply(
-                    lambda x: cal_ocp_slipage(x['OCP'], x['side'], x['avgPrice']), axis=1)
-                clientOrders['slipageByOCP'] = round(clientOrders['slipageByOCP'] * 10000, 2)
+                    # 3.计算OrderClosePx
+                    clientOrders['OCP'] = clientOrders.apply(
+                        lambda x: cal_ocp(tradingDay, x['expireTime'], x['symbol'], x['cumQty']), axis=1)
+                    clientOrders['slipageByOCP'] = clientOrders.apply(
+                        lambda x: cal_ocp_slipage(x['OCP'], x['side'], x['avgPrice']), axis=1)
+                    clientOrders['slipageByOCP'] = round(clientOrders['slipageByOCP'] * 10000, 2)
 
-                df_exchange_order = self.get_exchangeOrder(tradingday=tradingDay, clientId=clientId)
+                    df_exchange_order = self.get_exchangeOrder(tradingday=tradingDay, id_type=id_type, id=id)
 
-                buy_amt, buy_vwap_slipage, buy_pnl_vwap_yuan = self.stat_summary(clientOrders, 'Buy', 'VWAP')
-                buy_amt, buy_twap_slipage, buy_pnl_twap_yuan = self.stat_summary(clientOrders, 'Buy', 'TWAP')
-                buy_amt, buy_ocp_slipage, buy_pnl_ocp_yuan = self.stat_summary(clientOrders, 'Buy', 'OCP')
+                    buy_amt, buy_vwap_slipage, buy_pnl_vwap_yuan = self.stat_summary(clientOrders, 'Buy', 'VWAP')
+                    buy_amt, buy_twap_slipage, buy_pnl_twap_yuan = self.stat_summary(clientOrders, 'Buy', 'TWAP')
+                    buy_amt, buy_ocp_slipage, buy_pnl_ocp_yuan = self.stat_summary(clientOrders, 'Buy', 'OCP')
 
-                sell_amt, sell_vwap_slipage, sell_pnl_vwap_yuan = self.stat_summary(clientOrders, 'Sell', 'VWAP')
-                sell_amt, sell_twap_slipage, sell_pnl_twap_yuan = self.stat_summary(clientOrders, 'Sell', 'TWAP')
-                sell_amt, sell_ocp_slipage, sell_pnl_ocp_yuan = self.stat_summary(clientOrders, 'Sell', 'OCP')
+                    sell_amt, sell_vwap_slipage, sell_pnl_vwap_yuan = self.stat_summary(clientOrders, 'Sell', 'VWAP')
+                    sell_amt, sell_twap_slipage, sell_pnl_twap_yuan = self.stat_summary(clientOrders, 'Sell', 'TWAP')
+                    sell_amt, sell_ocp_slipage, sell_pnl_ocp_yuan = self.stat_summary(clientOrders, 'Sell', 'OCP')
 
-                df_summary = pd.DataFrame(
-                    {'Side': ['Buy', 'Sell'], 'FilledAmt(万元)': [round(buy_amt / 10000, 3), round(sell_amt / 10000, 3)],
-                     'PnL2VWAP(BPS)': [round(buy_vwap_slipage * 10000, 2),
-                                       round(sell_vwap_slipage * 10000, 2)],
-                     'PnL2TWAP(BPS)': [round(buy_twap_slipage * 10000, 2),
-                                       round(sell_twap_slipage * 10000, 2)],
-                     'PnL2OCP(BPS)': [round(buy_ocp_slipage * 10000, 2),
-                                      round(sell_ocp_slipage * 10000, 2)],
-                     'PnL2VWAP(YUAN)': [round(buy_pnl_vwap_yuan, 2),
-                                        round(sell_pnl_vwap_yuan, 2)],
-                     'PnL2TWAP(YUAN)': [round(buy_pnl_twap_yuan, 2),
-                                        round(sell_pnl_twap_yuan, 2)],
-                     'PnL2OCP(YUAN)': [round(buy_pnl_ocp_yuan, 2),
-                                       round(sell_pnl_ocp_yuan, 2)]
-                     }, index=[1, 2])
+                    df_summary = pd.DataFrame(
+                        {'Side': ['Buy', 'Sell'],
+                         'FilledAmt(万元)': [round(buy_amt / 10000, 3), round(sell_amt / 10000, 3)],
+                         'PnL2VWAP(BPS)': [round(buy_vwap_slipage * 10000, 2),
+                                           round(sell_vwap_slipage * 10000, 2)],
+                         'PnL2TWAP(BPS)': [round(buy_twap_slipage * 10000, 2),
+                                           round(sell_twap_slipage * 10000, 2)],
+                         'PnL2OCP(BPS)': [round(buy_ocp_slipage * 10000, 2),
+                                          round(sell_ocp_slipage * 10000, 2)],
+                         'PnL2VWAP(YUAN)': [round(buy_pnl_vwap_yuan, 2),
+                                            round(sell_pnl_vwap_yuan, 2)],
+                         'PnL2TWAP(YUAN)': [round(buy_pnl_twap_yuan, 2),
+                                            round(sell_pnl_twap_yuan, 2)],
+                         'PnL2OCP(YUAN)': [round(buy_pnl_ocp_yuan, 2),
+                                           round(sell_pnl_ocp_yuan, 2)]
+                         }, index=[1, 2])
 
-                df_receive = self.get_receiveList(clientId)
-                df_receive['tradingDay'] = tradingDay
+                    df_receive = self.get_receiveList(id_type=id_type, id=id)
+                    df_receive['tradingDay'] = tradingDay
 
-                self.email.add_email_content(f'ClientOrderReporter_{tradingDay}_({clientId})交易报告，请查收')
-                fileName = f'OrderReporter_{tradingDay}_({clientId}).xlsx'
-                pathCsv = os.path.join(f'Data/{fileName}')
+                    self.email.add_email_content(f'ClientOrderReporter_{tradingDay}_({id})交易报告，请查收')
+                    fileName = f'OrderReporter_{tradingDay}_({id}).xlsx'
+                    pathCsv = os.path.join(f'Data/{fileName}')
 
-                ExcelHelper.createExcel(pathCsv)
-                clientOrders['effectiveTime'] = clientOrders['effectiveTime'].map(lambda x: x.strftime('%H:%M:%S'))
-                clientOrders['expireTime'] = clientOrders['expireTime'].map(lambda x: x.strftime('%H:%M:%S'))
-                ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=df_summary, header=True,
-                                               sheet_name='algoSummary', sep_key='all_name')
-                ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=clientOrders,
-                                               header=True, sheet_name='algoClientOrder', sep_key='all_name')
-                ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=df_exchange_order,
-                                               header=True, sheet_name='algoExchangeOrder', sep_key='all_name')
-                ExcelHelper.removeSheet(pathCsv, 'Sheet')
+                    ExcelHelper.createExcel(pathCsv)
+                    clientOrders['effectiveTime'] = clientOrders['effectiveTime'].map(lambda x: x.strftime('%H:%M:%S'))
+                    clientOrders['expireTime'] = clientOrders['expireTime'].map(lambda x: x.strftime('%H:%M:%S'))
+                    ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=df_summary, header=True,
+                                                   sheet_name='algoSummary', sep_key='all_name')
+                    ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=clientOrders,
+                                                   header=True, sheet_name='algoClientOrder', sep_key='all_name')
+                    ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=df_exchange_order,
+                                                   header=True, sheet_name='algoExchangeOrder', sep_key='all_name')
+                    ExcelHelper.removeSheet(pathCsv, 'Sheet')
 
-                self.email.send_email_file(pathCsv, fileName, df_receive, subject_prefix='OrderReporter')
-                self.email.content = ''
-                self.logger.info(f'calculator: {tradingDay}__{clientId} successfully')
+                    self.email.send_email_file(pathCsv, fileName, df_receive,id, subject_prefix='OrderReporter')
+                    self.email.content = ''
+                    self.logger.info(f'calculator: {tradingDay}__{id} successfully')
 
 
 if __name__ == '__main__':
     cfg = RawConfigParser()
     cfg.read('config.ini', encoding='utf-8')
-    clientIds = cfg.get('OrderReporter', 'id')
+    clientIds = cfg.get('OrderReporter', 'clientId')
+    accountIds = cfg.get('OrderReporter', 'accountId')
     start = sys.argv[1]
     end = sys.argv[2]
-    reporter = OrderReporter(start, end, clientIds)
+    reporter = OrderReporter(start, end, clientIds, accountIds)

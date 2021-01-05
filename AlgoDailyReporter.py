@@ -145,9 +145,8 @@ class AlgoDailyReporter(object):
 
         data = pd.DataFrame(
             {'clientId': clientIds, 'accountId': accountIds, 'orderId': orderIds, 'symbol': symbol, 'side': side,
-             'effectiveTime': effectiveTime, 'expireTime': expireTime,
-             'exDestination': exDestination, 'avgprice': avgprice, 'cumQty': cumQty,
-             'slipageByVwap': slipageByVwap, 'ivwap': ivwap})
+             'effectiveTime': effectiveTime, 'expireTime': expireTime, 'exDestination': exDestination,
+             'avgprice': avgprice, 'cumQty': cumQty, 'slipageByVwap': slipageByVwap, 'ivwap': ivwap})
 
         data['cumQty'] = data['cumQty'].astype('int')
         data['avgprice'] = data['avgprice'].astype('float')
@@ -318,6 +317,8 @@ class AlgoDailyReporter(object):
                 all_clientOrders['slipageByTwap'] = all_clientOrders.apply(
                     lambda x: cal_twap_slipage(x['TWAP'], x['side'], x['avgprice']), axis=1)
 
+                # df = all_clientOrders[(all_clientOrders['exDestination'] == 0) & (all_clientOrders['side'] == 1)]
+                # df.to_csv('twap.csv')
                 # 3.所有信号单
                 all_has_signal_clientOrders = self.get_has_signal_clientOrder(tradingDay, clientId)  # 所有信号单
                 all_clientOrders['flag'] = all_clientOrders.apply(
