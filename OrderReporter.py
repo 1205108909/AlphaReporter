@@ -107,7 +107,7 @@ class OrderReporter(object):
                     stmt = f"select * from ClientOrderView where orderQty>0 and (securityType='RPO' or securityType='EQA') and tradingDay = \'{tradingday}\' and accountId like \'{accountId}\' AND algo <> 'POV' AND algo <> 'PEGGING'"
                 elif send_mode == SendMode.clientId_accountId:
                     stmt = f"select * from ClientOrderView where orderQty>0 and (securityType='RPO' or securityType='EQA') and tradingDay = \'{tradingday}\' and clientId like \'{clientId}\' and accountId like \'{accountId}\' AND algo <> 'POV' AND algo <> 'PEGGING'"
-
+                self.logger.info(stmt)
                 cursor.execute(stmt)
                 for row in cursor:
                     orderId.append(row['orderId'])
@@ -147,7 +147,7 @@ class OrderReporter(object):
                     stmt = f"SELECT a.orderId, sliceStatus, sliceCount FROM ClientOrderView a JOIN (SELECT orderId,orderStatus AS sliceStatus,COUNT (*) AS sliceCount FROM ExchangeOrderView WHERE orderStatus IN ('Filled', 'Canceled') GROUP BY orderId,orderStatus) b ON a.orderId = b.orderId WHERE a.tradingDay = \'{tradingday}\' AND a.algo <> 'POV' AND a.algo <> 'PEGGING'  AND a.accountId like \'{accountId}\' ORDER BY a.orderId"
                 elif send_mode == SendMode.clientId_accountId:
                     stmt = f"SELECT a.orderId, sliceStatus, sliceCount FROM ClientOrderView a JOIN (SELECT orderId,orderStatus AS sliceStatus,COUNT (*) AS sliceCount FROM ExchangeOrderView WHERE orderStatus IN ('Filled', 'Canceled') GROUP BY orderId,orderStatus) b ON a.orderId = b.orderId WHERE a.tradingDay = \'{tradingday}\' AND a.algo <> 'POV' AND a.algo <> 'PEGGING'  AND a.clientId like \'{clientId}\' AND a.accountId like \'{accountId}\' ORDER BY a.orderId"
-
+                self.logger.info(stmt)
                 cursor.execute(stmt)
                 for row in cursor:
                     orderId.append(row['orderId'])
@@ -184,6 +184,7 @@ class OrderReporter(object):
                     stmt = f"SELECT a.sliceId, a.orderId, b.side,b.symbol,a.effectiveTime,a.qty,a.cumQty,a.leavesQty,a.price,a.sliceAvgPrice,a.orderStatus from ExchangeOrderView a join ClientOrderView b on a.orderId=b.orderId where a.orderStatus in ('Filled','Canceled') AND b.tradingDay = \'{tradingday}\' AND b.accountId like \'{accountId}\' AND b.algo <> 'POV' AND b.algo <> 'PEGGING'"
                 elif send_mode == SendMode.clientId_accountId:
                     stmt = f"SELECT a.sliceId, a.orderId, b.side,b.symbol,a.effectiveTime,a.qty,a.cumQty,a.leavesQty,a.price,a.sliceAvgPrice,a.orderStatus from ExchangeOrderView a join ClientOrderView b on a.orderId=b.orderId where a.orderStatus in ('Filled','Canceled') AND b.tradingDay = \'{tradingday}\' AND b.clientId like \'{clientId}\' AND b.accountId like \'{accountId}\' AND b.algo <> 'POV' AND b.algo <> 'PEGGING'"
+                self.logger.info(stmt)
                 cursor.execute(stmt)
                 for row in cursor:
                     sliceId.append(row['sliceId'])
@@ -465,19 +466,19 @@ class OrderReporter(object):
                 clientId = row['clientId']
                 accountId = row['accountId']
                 clientName = row['clientName']
-                self.logger.info(f'start calculator: {tradingDay}__clientId__{clientId}')
-                fileName = f'OrderReporter_{tradingDay}_({clientId}).xlsx'
+                if send_mode == SendMode.clientId:
+                    showId = clientId
+                elif send_mode == SendMode.accountId:
+                    showId = accountId
+                elif send_mode == SendMode.clientId_accountId:
+                    showId = accountId
+                self.logger.info(f'start calculator: {tradingDay}__clientId__{showId}')
+                fileName = f'OrderReporter_{tradingDay}_({showId}).xlsx'
                 pathCsv = os.path.join(f'Data/OrderReporter/{tradingDay}/{fileName}')
 
                 isSuccess = cal_client_exchange_summary(tradingDay, send_mode, clientId=clientId,
                                                         accountId=accountId, pathCsv=pathCsv)
                 if isSuccess:
-                    if send_mode == SendMode.clientId:
-                        showId = clientId
-                    elif send_mode == SendMode.accountId:
-                        showId = accountId
-                    elif send_mode == SendMode.clientId_accountId:
-                        showId = accountId
                     self.email.add_email_content(f'ClientOrderReporter_{tradingDay}_({showId})交易报告，请查收')
                     subject = f'OrderReporter:{clientName}({showId})_{tradingDay}'
                     self.email.send_email_file(pathCsv, fileName, to_receiver=row['to_receiver'].split(';'),
