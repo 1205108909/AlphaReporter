@@ -22,9 +22,11 @@ pd.set_option('display.max_rows', None)
 from enum import Enum
 
 
-class IdType(Enum):
+class SendMode(Enum):
     clientId = 1
     accountId = 2
+    clientId_accountId = 3
+    zip_clientId = 4
 
 
 class OrderReporter(object):
@@ -39,13 +41,9 @@ class OrderReporter(object):
 
         jyloader = JYDataLoader()
         tradingdays = jyloader.get_tradingday(start, end)
-        clientIds = OrderReportID.clientId
-        accountIds = OrderReportID.accountId
-        zipClientIds = OrderReportID.zipClientId
         self.email = EmailHelper.instance()
-        one_2_one_id = {IdType.clientId: clientIds, IdType.accountId: accountIds}
-        one_2_mul_id = {IdType.clientId: zipClientIds}
-        self.run(tradingdays, one_2_one_id, one_2_mul_id)
+
+        self.run(tradingdays)
 
     def get_connection(self):
         try:
@@ -54,35 +52,35 @@ class OrderReporter(object):
         except pymssql.OperationalError as e:
             print(e)
 
-    def get_receiveList(self, id_type, id):
-        if id == '':
-            return pd.DataFrame()
-        accountIds = []
-        clientIds = []
-        clientName = []
-        to_receiver = []
-        cc_receiver = []
-        id = id + '%'
-        with self.get_connection() as conn:
-            with conn.cursor(as_dict=True) as cursor:
-                if id_type == IdType.clientId:
-                    stmt = f"select * from ClientsForPy where clientId like \'{id}\'"
-                else:
-                    stmt = f"select * from ClientsForPy where accountId like \'{id}\'"
-                cursor.execute(stmt)
-                for row in cursor:
-                    accountIds.append(row['accountId'])
-                    clientIds.append(row['clientId'])
-                    clientName.append(row['clientName'])
-                    to_receiver.append(row['email'])
-                    cc_receiver.append(row['repsentEmail'])
+    # def get_receiveList(self, id_type, id):
+    #     if id == '':
+    #         return pd.DataFrame()
+    #     accountIds = []
+    #     clientIds = []
+    #     clientName = []
+    #     to_receiver = []
+    #     cc_receiver = []
+    #     id = id + '%'
+    #     with self.get_connection() as conn:
+    #         with conn.cursor(as_dict=True) as cursor:
+    #             if id_type == IdType.clientId:
+    #                 stmt = f"select * from ClientsForPy_copy1 where clientId like \'{id}\'"
+    #             else:
+    #                 stmt = f"select * from ClientsForPy_copy1 where accountId like \'{id}\'"
+    #             cursor.execute(stmt)
+    #             for row in cursor:
+    #                 accountIds.append(row['accountId'])
+    #                 clientIds.append(row['clientId'])
+    #                 clientName.append(row['clientName'])
+    #                 to_receiver.append(row['email'])
+    #                 cc_receiver.append(row['repsentEmail'])
+    #
+    #     data = pd.DataFrame(
+    #         {'accountId': accountIds, 'clientId': clientIds, 'clientName': clientName, 'to_receiver': to_receiver,
+    #          'cc_receiver': cc_receiver})
+    #     return data
 
-        data = pd.DataFrame(
-            {'accountId': accountIds, 'clientId': clientIds, 'clientName': clientName, 'to_receiver': to_receiver,
-             'cc_receiver': cc_receiver})
-        return data
-
-    def get_clientOrder(self, tradingday, id_type, id):
+    def get_clientOrder(self, tradingday, send_mode, clientId, accountId):
         """
         get_clientOrder
         :param start: '20150101'
@@ -103,10 +101,13 @@ class OrderReporter(object):
         VWAP = []
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
-                if id_type == IdType.clientId:
-                    stmt = f"select * from ClientOrderView where orderQty>0 and (securityType='RPO' or securityType='EQA') and tradingDay = \'{tradingday}\' and clientId like \'{id}\' AND algo <> 'POV' AND algo <> 'PEGGING'"
-                else:
-                    stmt = f"select * from ClientOrderView where orderQty>0 and (securityType='RPO' or securityType='EQA') and tradingDay = \'{tradingday}\' and accountId like \'{id}\' AND algo <> 'POV' AND algo <> 'PEGGING'"
+                if send_mode == SendMode.clientId:
+                    stmt = f"select * from ClientOrderView where orderQty>0 and (securityType='RPO' or securityType='EQA') and tradingDay = \'{tradingday}\' and clientId like \'{clientId}\' AND algo <> 'POV' AND algo <> 'PEGGING'"
+                elif send_mode == SendMode.accountId:
+                    stmt = f"select * from ClientOrderView where orderQty>0 and (securityType='RPO' or securityType='EQA') and tradingDay = \'{tradingday}\' and accountId like \'{accountId}\' AND algo <> 'POV' AND algo <> 'PEGGING'"
+                elif send_mode == SendMode.clientId_accountId:
+                    stmt = f"select * from ClientOrderView where orderQty>0 and (securityType='RPO' or securityType='EQA') and tradingDay = \'{tradingday}\' and clientId like \'{clientId}\' and accountId like \'{accountId}\' AND algo <> 'POV' AND algo <> 'PEGGING'"
+
                 cursor.execute(stmt)
                 for row in cursor:
                     orderId.append(row['orderId'])
@@ -133,17 +134,20 @@ class OrderReporter(object):
         data['turnover'] = data['avgPrice'] * data['cumQty']
         return data
 
-    def get_client_order_count(self, tradingday, id_type, id):
+    def get_client_order_count(self, tradingday, send_mode, clientId, accountId):
         orderId = []
         sliceStatus = []
         sliceCount = []
 
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
-                if id_type == IdType.clientId:
-                    stmt = f"SELECT a.orderId, sliceStatus, sliceCount FROM ClientOrderView a JOIN (SELECT orderId,orderStatus AS sliceStatus,COUNT (*) AS sliceCount FROM ExchangeOrderView WHERE orderStatus IN ('Filled', 'Canceled') GROUP BY orderId,orderStatus) b ON a.orderId = b.orderId WHERE a.tradingDay = \'{tradingday}\' AND a.clientId like \'{id}\' AND a.algo <> 'POV' AND a.algo <> 'PEGGING'  ORDER BY a.orderId"
-                else:
-                    stmt = f"SELECT a.orderId, sliceStatus, sliceCount FROM ClientOrderView a JOIN (SELECT orderId,orderStatus AS sliceStatus,COUNT (*) AS sliceCount FROM ExchangeOrderView WHERE orderStatus IN ('Filled', 'Canceled') GROUP BY orderId,orderStatus) b ON a.orderId = b.orderId WHERE a.tradingDay = \'{tradingday}\' AND a.algo <> 'POV' AND a.algo <> 'PEGGING'  AND a.accountId like \'{id}\' ORDER BY a.orderId"
+                if send_mode == SendMode.clientId:
+                    stmt = f"SELECT a.orderId, sliceStatus, sliceCount FROM ClientOrderView a JOIN (SELECT orderId,orderStatus AS sliceStatus,COUNT (*) AS sliceCount FROM ExchangeOrderView WHERE orderStatus IN ('Filled', 'Canceled') GROUP BY orderId,orderStatus) b ON a.orderId = b.orderId WHERE a.tradingDay = \'{tradingday}\' AND a.clientId like \'{clientId}\' AND a.algo <> 'POV' AND a.algo <> 'PEGGING'  ORDER BY a.orderId"
+                elif send_mode == SendMode.accountId:
+                    stmt = f"SELECT a.orderId, sliceStatus, sliceCount FROM ClientOrderView a JOIN (SELECT orderId,orderStatus AS sliceStatus,COUNT (*) AS sliceCount FROM ExchangeOrderView WHERE orderStatus IN ('Filled', 'Canceled') GROUP BY orderId,orderStatus) b ON a.orderId = b.orderId WHERE a.tradingDay = \'{tradingday}\' AND a.algo <> 'POV' AND a.algo <> 'PEGGING'  AND a.accountId like \'{accountId}\' ORDER BY a.orderId"
+                elif send_mode == SendMode.clientId_accountId:
+                    stmt = f"SELECT a.orderId, sliceStatus, sliceCount FROM ClientOrderView a JOIN (SELECT orderId,orderStatus AS sliceStatus,COUNT (*) AS sliceCount FROM ExchangeOrderView WHERE orderStatus IN ('Filled', 'Canceled') GROUP BY orderId,orderStatus) b ON a.orderId = b.orderId WHERE a.tradingDay = \'{tradingday}\' AND a.algo <> 'POV' AND a.algo <> 'PEGGING'  AND a.clientId like \'{clientId}\' AND a.accountId like \'{accountId}\' ORDER BY a.orderId"
+
                 cursor.execute(stmt)
                 for row in cursor:
                     orderId.append(row['orderId'])
@@ -154,7 +158,7 @@ class OrderReporter(object):
         data['sliceCount'] = data['sliceCount'].astype('int')
         return data
 
-    def get_exchangeOrder(self, tradingday, id_type, id):
+    def get_exchangeOrder(self, tradingday, send_mode, clientId, accountId):
         """
         get_clientOrder
         :param start: '20150101'
@@ -174,10 +178,12 @@ class OrderReporter(object):
         orderStatus = []
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
-                if id_type == IdType.clientId:
-                    stmt = f"SELECT a.sliceId, a.orderId, b.side,b.symbol,a.effectiveTime,a.qty,a.cumQty,a.leavesQty,a.price,a.sliceAvgPrice,a.orderStatus from ExchangeOrderView a join ClientOrderView b on a.orderId=b.orderId where a.orderStatus in ('Filled','Canceled') AND b.tradingDay = \'{tradingday}\' AND b.clientId like \'{id}\' AND b.algo <> 'POV' AND b.algo <> 'PEGGING'"
-                else:
-                    stmt = f"SELECT a.sliceId, a.orderId, b.side,b.symbol,a.effectiveTime,a.qty,a.cumQty,a.leavesQty,a.price,a.sliceAvgPrice,a.orderStatus from ExchangeOrderView a join ClientOrderView b on a.orderId=b.orderId where a.orderStatus in ('Filled','Canceled') AND b.tradingDay = \'{tradingday}\' AND b.accountId like \'{id}\' AND b.algo <> 'POV' AND b.algo <> 'PEGGING'"
+                if send_mode == SendMode.clientId:
+                    stmt = f"SELECT a.sliceId, a.orderId, b.side,b.symbol,a.effectiveTime,a.qty,a.cumQty,a.leavesQty,a.price,a.sliceAvgPrice,a.orderStatus from ExchangeOrderView a join ClientOrderView b on a.orderId=b.orderId where a.orderStatus in ('Filled','Canceled') AND b.tradingDay = \'{tradingday}\' AND b.clientId like \'{clientId}\' AND b.algo <> 'POV' AND b.algo <> 'PEGGING'"
+                elif send_mode == SendMode.accountId:
+                    stmt = f"SELECT a.sliceId, a.orderId, b.side,b.symbol,a.effectiveTime,a.qty,a.cumQty,a.leavesQty,a.price,a.sliceAvgPrice,a.orderStatus from ExchangeOrderView a join ClientOrderView b on a.orderId=b.orderId where a.orderStatus in ('Filled','Canceled') AND b.tradingDay = \'{tradingday}\' AND b.accountId like \'{accountId}\' AND b.algo <> 'POV' AND b.algo <> 'PEGGING'"
+                elif send_mode == SendMode.clientId_accountId:
+                    stmt = f"SELECT a.sliceId, a.orderId, b.side,b.symbol,a.effectiveTime,a.qty,a.cumQty,a.leavesQty,a.price,a.sliceAvgPrice,a.orderStatus from ExchangeOrderView a join ClientOrderView b on a.orderId=b.orderId where a.orderStatus in ('Filled','Canceled') AND b.tradingDay = \'{tradingday}\' AND b.clientId like \'{clientId}\' AND b.accountId like \'{accountId}\' AND b.algo <> 'POV' AND b.algo <> 'PEGGING'"
                 cursor.execute(stmt)
                 for row in cursor:
                     sliceId.append(row['sliceId'])
@@ -276,7 +282,54 @@ class OrderReporter(object):
                         continue
                     zip.write(os.path.join(dirpath, filename), fpath + filename)
 
-    def run(self, tradingDays, dict_ids, one_2_mul_id):
+    def get_all_receiveList(self):
+        accountIds = []
+        clientIds = []
+        sendModes = []
+        clientNames = []
+        emails = []
+        repsentEmails = []
+        reportFrequencys = []
+        sendToClients = []
+        isZips = []
+        zipIds = []
+        zipTypes = []
+        isValids = []
+        with self.get_connection() as conn:
+            with conn.cursor(as_dict=True) as cursor:
+                stmt = f"select * from ClientsForPy_copy1"
+                self.logger.info(stmt)
+                cursor.execute(stmt)
+                for row in cursor:
+                    if row['sendToClient'] == 'N':
+                        continue
+                    accountIds.append(row['accountId'])
+                    clientIds.append(row['clientId'])
+                    sendModes.append(row['sendMode'])
+                    clientNames.append(row['clientName'])
+                    emails.append(row['email'])
+
+                    repsentEmails.append(row['repsentEmail'])
+                    reportFrequencys.append(row['reportFrequency'])
+                    sendToClients.append(row['sendToClient'])
+                    isZips.append(row['isZip'])
+                    zipIds.append(row['zipId'])
+                    zipTypes.append(row['zipType'])
+                    isValids.append(row['isValid'])
+        data = pd.DataFrame(
+            {'accountId': accountIds, 'clientId': clientIds, 'sendMode': sendModes, 'clientName': clientNames,
+             'to_receiver': emails, 'cc_receiver': repsentEmails, 'reportFrequency': reportFrequencys,
+             'sendToClient': sendToClients, 'isZip': isZips, 'zipId': zipIds, 'zipType': zipTypes, 'isValid': isValids
+             })
+        return data
+
+    def run(self, tradingDays):
+        df_clients = self.get_all_receiveList()
+        df_only_clientId = df_clients[df_clients['sendMode'] == 1]
+        df_only_accountId = df_clients[df_clients['sendMode'] == 2]
+        df_clientId_accountId = df_clients[df_clients['sendMode'] == 3]
+        df_zip_clientId = df_clients[df_clients['sendMode'] == 4]
+
         def cal_twap(tradingDay, effectiveTime, expireTime, symbol, price, side, cumQty):
             if cumQty == 0:
                 return 0
@@ -330,11 +383,11 @@ class OrderReporter(object):
 
             return tick
 
-        def cal_client_exchange_summary(tradingDay, id_type, id):
-            df_client_order = self.get_clientOrder(tradingDay, id_type, id)
+        def cal_client_exchange_summary(tradingDay, send_mode, clientId, accountId, pathCsv):
+            df_client_order = self.get_clientOrder(tradingDay, send_mode, clientId, accountId)
             if len(df_client_order) == 0:
                 return False
-            df_client_order_count = self.get_client_order_count(tradingDay, id_type, id)
+            df_client_order_count = self.get_client_order_count(tradingDay, send_mode, clientId, accountId)
             df_client_order_count['sliceStatus'] = df_client_order_count['sliceStatus'].map(
                 lambda x: x + 'Count')
             df_client_order_count = df_client_order_count.pivot(index='orderId', columns='sliceStatus',
@@ -369,7 +422,8 @@ class OrderReporter(object):
                 lambda x: cal_ocp_slipage(x['OCP'], x['side'], x['avgPrice']), axis=1)
             df_client_order['slipageByOCP'] = round(df_client_order['slipageByOCP'] * 10000, 2)
 
-            df_exchange_order = self.get_exchangeOrder(tradingday=tradingDay, id_type=id_type, id=id)
+            df_exchange_order = self.get_exchangeOrder(tradingday=tradingDay, send_mode=send_mode, clientId=clientId,
+                                                       accountId=accountId)
 
             buy_amt, buy_vwap_slipage, buy_pnl_vwap_yuan = self.stat_summary(df_client_order, 'Buy', 'VWAP')
             buy_amt, buy_twap_slipage, buy_pnl_twap_yuan = self.stat_summary(df_client_order, 'Buy', 'TWAP')
@@ -380,21 +434,13 @@ class OrderReporter(object):
             sell_amt, sell_ocp_slipage, sell_pnl_ocp_yuan = self.stat_summary(df_client_order, 'Sell', 'OCP')
 
             df_summary = pd.DataFrame(
-                {'Side': ['Buy', 'Sell'],
-                 'FilledAmt(万元)': [round(buy_amt / 10000, 3), round(sell_amt / 10000, 3)],
-                 'PnL2VWAP(BPS)': [round(buy_vwap_slipage * 10000, 2),
-                                   round(sell_vwap_slipage * 10000, 2)],
-                 'PnL2TWAP(BPS)': [round(buy_twap_slipage * 10000, 2),
-                                   round(sell_twap_slipage * 10000, 2)],
-                 'PnL2OCP(BPS)': [round(buy_ocp_slipage * 10000, 2),
-                                  round(sell_ocp_slipage * 10000, 2)],
-                 'PnL2VWAP(YUAN)': [round(buy_pnl_vwap_yuan, 2),
-                                    round(sell_pnl_vwap_yuan, 2)],
-                 'PnL2TWAP(YUAN)': [round(buy_pnl_twap_yuan, 2),
-                                    round(sell_pnl_twap_yuan, 2)],
-                 'PnL2OCP(YUAN)': [round(buy_pnl_ocp_yuan, 2),
-                                   round(sell_pnl_ocp_yuan, 2)]
-                 }, index=[1, 2])
+                {'Side': ['Buy', 'Sell'], 'FilledAmt(万元)': [round(buy_amt / 10000, 3), round(sell_amt / 10000, 3)],
+                 'PnL2VWAP(BPS)': [round(buy_vwap_slipage * 10000, 2), round(sell_vwap_slipage * 10000, 2)],
+                 'PnL2TWAP(BPS)': [round(buy_twap_slipage * 10000, 2), round(sell_twap_slipage * 10000, 2)],
+                 'PnL2OCP(BPS)': [round(buy_ocp_slipage * 10000, 2), round(sell_ocp_slipage * 10000, 2)],
+                 'PnL2VWAP(YUAN)': [round(buy_pnl_vwap_yuan, 2), round(sell_pnl_vwap_yuan, 2)],
+                 'PnL2TWAP(YUAN)': [round(buy_pnl_twap_yuan, 2), round(sell_pnl_twap_yuan, 2)],
+                 'PnL2OCP(YUAN)': [round(buy_pnl_ocp_yuan, 2), round(sell_pnl_ocp_yuan, 2)]}, index=[1, 2])
 
             if (len(df_exchange_order) == 0) & (len(df_summary) == 0):
                 return False
@@ -410,8 +456,34 @@ class OrderReporter(object):
             ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=df_exchange_order,
                                            header=True, sheet_name='algoExchangeOrder', sep_key='all_name')
             ExcelHelper.removeSheet(pathCsv, 'Sheet')
-            self.logger.info(f'calculator: {tradingDay}__{id} successfully')
+            self.logger.info(f'calculator: {tradingDay}__{clientId}__{accountId} successfully')
             return True
+
+        def main_cal(df, subset, send_mode):
+            df.drop_duplicates(subset=subset, keep='first', inplace=True)
+            for index, row in df.iterrows():
+                clientId = row['clientId']
+                accountId = row['accountId']
+                clientName = row['clientName']
+                self.logger.info(f'start calculator: {tradingDay}__clientId__{clientId}')
+                fileName = f'OrderReporter_{tradingDay}_({clientId}).xlsx'
+                pathCsv = os.path.join(f'Data/OrderReporter/{tradingDay}/{fileName}')
+
+                isSuccess = cal_client_exchange_summary(tradingDay, send_mode, clientId=clientId,
+                                                        accountId=accountId, pathCsv=pathCsv)
+                if isSuccess:
+                    if send_mode == SendMode.clientId:
+                        showId = clientId
+                    elif send_mode == SendMode.accountId:
+                        showId = accountId
+                    elif send_mode == SendMode.clientId_accountId:
+                        showId = accountId
+                    self.email.add_email_content(f'ClientOrderReporter_{tradingDay}_({showId})交易报告，请查收')
+                    subject = f'OrderReporter:{clientName}({showId})_{tradingDay}'
+                    self.email.send_email_file(pathCsv, fileName, to_receiver=row['to_receiver'].split(';'),
+                                               cc_receiver=row['cc_receiver'].split(';'), subject=subject)
+                    self.email.content = ''
+                    self.logger.info(f'calculator: {tradingDay}__{showId} successfully')
 
         for tradingDay in tradingDays:
             if not os.path.exists(os.path.join(self.tick_path, tradingDay + '.h5')):
@@ -421,42 +493,92 @@ class OrderReporter(object):
             if not os.path.exists(dir_data):
                 os.makedirs(dir_data)
 
-            for id_type, ids in dict_ids.items():
-                for id in ids:
-                    df_receive = self.get_receiveList(id_type=id_type, id=id)
-                    df_receive['tradingDay'] = tradingDay
-                    self.logger.info(f'start calculator: {tradingDay}__{id_type}__{id}')
-                    fileName = f'OrderReporter_{tradingDay}_({id}).xlsx'
-                    pathCsv = os.path.join(f'Data/OrderReporter/{tradingDay}/{fileName}')
+            main_cal(df_only_clientId, ['clientId'], SendMode.clientId)
+            main_cal(df_only_accountId, ['accountId'], SendMode.accountId)
+            main_cal(df_clientId_accountId, ['clientId', 'accountId'], SendMode.clientId_accountId)
+            # df_only_clientId.drop_duplicates(subset=['clientId'], keep='first', inplace=True)
+            # for index, row in df_only_clientId.iterrows():
+            #     clientId = row['clientId']
+            #     clientName = row['clientName']
+            #     self.logger.info(f'start calculator: {tradingDay}__clientId__{clientId}')
+            #     fileName = f'OrderReporter_{tradingDay}_({clientId}).xlsx'
+            #     pathCsv = os.path.join(f'Data/OrderReporter/{tradingDay}/{fileName}')
+            #
+            #     isSuccess = cal_client_exchange_summary(tradingDay, SendMode.clientId, clientId=clientId)
+            #     if isSuccess:
+            #         self.email.add_email_content(f'ClientOrderReporter_{tradingDay}_({clientId})交易报告，请查收')
+            #         subject = f'OrderReporter:{clientName}({clientId})_{tradingDay}'
+            #         self.email.send_email_file(pathCsv, fileName, to_receiver=row['to_receiver'].split(';'),
+            #                                    cc_receiver=row['cc_receiver'].split(';'), subject=subject)
+            #         self.email.content = ''
+            #         self.logger.info(f'calculator: {tradingDay}__{clientId} successfully')
+            #
+            # df_only_accountId.drop_duplicates(subset=['accountId'], keep='first', inplace=True)
+            # for index, row in df_only_accountId.iterrows():
+            #     accountId = row['accountId']
+            #     clientName = row['clientName']
+            #     self.logger.info(f'start calculator: {tradingDay}__accountId__{accountId}')
+            #     fileName = f'OrderReporter_{tradingDay}_({accountId}).xlsx'
+            #     pathCsv = os.path.join(f'Data/OrderReporter/{tradingDay}/{fileName}')
+            #
+            #     isSuccess = cal_client_exchange_summary(tradingDay, SendMode.accountId, accountId=accountId)
+            #     if isSuccess:
+            #         self.email.add_email_content(f'ClientOrderReporter_{tradingDay}_({accountId})交易报告，请查收')
+            #         subject = f'OrderReporter:{clientName}({accountId})_{tradingDay}'
+            #         self.email.send_email_file(pathCsv, fileName, to_receiver=row['to_receiver'].split(';'),
+            #                                    cc_receiver=row['cc_receiver'].split(';'), subject=subject)
+            #         self.email.content = ''
+            #         self.logger.info(f'calculator: {tradingDay}__{accountId} successfully')
+            #
+            # df_clientId_accountId.drop_duplicates(subset=['clientId', 'accountId'], keep='first', inplace=True)
+            # for index, row in df_clientId_accountId.iterrows():
+            #     row_clientId = row['clientId']
+            #     row_accountId = row['accountId']
+            #     clientName = row['clientName']
+            #     self.logger.info(
+            #         f'start calculator: {tradingDay}__clientId[{row_clientId}]__accountId[{row_accountId}]')
+            #     fileName = f'OrderReporter_{tradingDay}_({row_accountId}).xlsx'
+            #     pathCsv = os.path.join(f'Data/OrderReporter/{tradingDay}/{fileName}')
+            #
+            #     isSuccess = cal_client_exchange_summary(tradingDay, SendMode.clientId_accountId, clientId=row_clientId,
+            #                                             accountId=row_accountId)
+            #     if isSuccess:
+            #         self.email.add_email_content(f'ClientOrderReporter_{tradingDay}_({row_accountId})交易报告，请查收')
+            #         subject = f'OrderReporter:{clientName}({row_accountId})_{tradingDay}'
+            #         self.email.send_email_file(pathCsv, fileName, to_receiver=row['to_receiver'].split(';'),
+            #                                    cc_receiver=row['cc_receiver'].split(';'), subject=subject)
+            #         self.email.content = ''
+            #         self.logger.info(f'calculator: {tradingDay}__{row_accountId} successfully')
 
-                    isSuccess = cal_client_exchange_summary(tradingDay, id_type, id)
-                    if isSuccess:
-                        self.email.add_email_content(f'ClientOrderReporter_{tradingDay}_({id})交易报告，请查收')
-                        self.email.send_email_file(pathCsv, fileName, df_receive, id, subject_prefix='OrderReporter')
-                        self.email.content = ''
-                        self.logger.info(f'calculator: {tradingDay}__{id} successfully')
+            set_zipIds = set(df_zip_clientId['zipId'])
+            for zipid in set_zipIds:
+                df_one_zip_clientId = df_zip_clientId[df_zip_clientId['zipId'] == zipid]
+                df_one_zip_clientId.drop_duplicates(subset=['clientId'], keep='first', inplace=True)
 
-        for id_type, zip_ids_dict in one_2_mul_id.items():
-            for email_key, zip_ids in zip_ids_dict.items():
-                if len(zip_ids) == 0:
-                    continue
-                df_receive = self.get_receiveList(id_type=id_type, id=email_key)
-                df_receive['tradingDay'] = tradingDay
-                self.email.add_email_content(f'ClientOrderReporter_{tradingDay}_({email_key})交易报告，请查收')
-                dir_csv = os.path.join(dir_data, f'{email_key}')
+                self.email.add_email_content(f'ClientOrderReporter_{tradingDay}_({zipid})交易报告，请查收')
+                dir_csv = os.path.join(dir_data, f'{zipid}')
                 if not os.path.exists(dir_csv):
                     os.makedirs(dir_csv)
-                for id in zip_ids:
-                    self.logger.info(f'start calculator: {tradingDay}__{id_type}__{id}')
-                    fileName = f'OrderReporter_{tradingDay}_({id}).xlsx'
+
+                df_one_zip_clientId.drop_duplicates(subset=['clientId'], keep='first', inplace=True)
+                for index, row in df_one_zip_clientId.iterrows():
+                    clientId = row['clientId']
+                    clientName = row['clientName']
+                    self.logger.info(f'start calculator: {tradingDay}__{SendMode.clientId}__{clientId}')
+                    fileName = f'OrderReporter_{tradingDay}_({clientId}).xlsx'
                     pathCsv = os.path.join(dir_csv, fileName)
-                    cal_client_exchange_summary(tradingDay, id_type, id)
-                  
-                self.compress_file(dir_csv, f'{email_key}.zip')
-                zip_file = os.path.join(dir_csv, f'{email_key}.zip')
-                self.email.send_email_zip(zip_file, f'{email_key}.zip', df_receive, subject_prefix='OrderReporter')
+                    cal_client_exchange_summary(tradingDay, SendMode.clientId, clientId=clientId, accountId='',
+                                                pathCsv=pathCsv)
+
+                if os.path.getsize(dir_csv) <= 0:
+                    continue
+                self.compress_file(dir_csv, f'{zipid}.zip')
+                zip_file = os.path.join(dir_csv, f'{zipid}.zip')
+                subject = f'OrderReporter:{clientName}({zipid})_{tradingDay}'
+                self.email.send_email_zip(zip_file, f'{zipid}.zip', to_receiver=row['to_receiver'].split(';'),
+                                          cc_receiver=row['cc_receiver'].split(';'), subject=subject)
                 self.email.content = ''
-                self.logger.info(f'send_email_file: {tradingDay}__{email_key} successfully')
+                self.logger.info(f'send_email_file: {tradingDay}__{zipid} successfully')
 
 
 if __name__ == '__main__':

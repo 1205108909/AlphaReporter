@@ -70,7 +70,7 @@ class EmailHelper(object):
             smtpObj = smtplib.SMTP()
             smtpObj.connect(self.server)
             smtpObj.login(self.sender, self.pwd)
-            smtpObj.sendmail(self.sender, self.receivers, message.as_string())
+            # smtpObj.sendmail(self.sender, self.receivers, message.as_string())
             print("邮件发送成功")
         except smtplib.SMTPException as e:
             print(e)
@@ -98,7 +98,7 @@ class EmailHelper(object):
             smtpObj = smtplib.SMTP()
             smtpObj.connect(self.server)
             smtpObj.login(self.sender, self.pwd)
-            smtpObj.sendmail(self.sender, self.receivers, message.as_string())
+            # smtpObj.sendmail(self.sender, self.receivers, message.as_string())
             print("邮件发送成功")
             if is_clear_content:
                 self.content = ''
@@ -106,7 +106,7 @@ class EmailHelper(object):
             print(e)
             print("Error: 无法发送邮件")
 
-    def send_email_file(self, file_path, file_name, df_receive, id, subject_prefix='算法交易报告'):
+    def send_email_file(self, file_path, file_name, to_receiver, cc_receiver, subject=''):
         """
         发送带文件的邮件
         :param file_path:邮件路径
@@ -115,13 +115,6 @@ class EmailHelper(object):
         """
         if len(self.content) == 0:
             return
-        if df_receive.shape[0] == 0:
-            return
-        to_receiver = df_receive.iloc[0, :]['to_receiver'].split(';')
-        cc_receiver = df_receive.iloc[0, :]['cc_receiver'].split(';')
-        clientName = df_receive.iloc[0, :]['clientName']
-        tradingDay = df_receive.iloc[0, :]['tradingDay']
-        subject = f'{subject_prefix}:{clientName}({id})_{tradingDay}'
         # 创建一个带附件的实例
         message = MIMEMultipart()
         message['From'] = self.sender
@@ -150,7 +143,7 @@ class EmailHelper(object):
             print(e)
             print("Error: 无法发送邮件")
 
-    def send_email_zip(self, zip_file, filename, df_receive, subject_prefix='算法交易报告'):
+    def send_email_zip(self, zip_file, filename, to_receiver, cc_receiver, subject=''):
         """
         发送带文件的邮件
         :param file_path:邮件路径
@@ -159,13 +152,7 @@ class EmailHelper(object):
         """
         if len(self.content) == 0:
             return
-        if df_receive.shape[0] == 0:
-            return
-        to_receiver = df_receive.iloc[0, :]['to_receiver'].split(';')
-        cc_receiver = df_receive.iloc[0, :]['cc_receiver'].split(';')
-        clientName = df_receive.iloc[0, :]['clientName']
-        tradingDay = df_receive.iloc[0, :]['tradingDay']
-        subject = f'{subject_prefix}:{clientName}_{tradingDay}'
+
         # 创建一个带附件的实例
         message = MIMEMultipart()
         message['From'] = self.sender

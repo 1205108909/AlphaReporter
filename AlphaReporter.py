@@ -479,8 +479,13 @@ class AlphaReporter(object):
 
                 self.calSignalEffect(clientId, pathCsv, tradingDay, tradingDay, 0)
                 ExcelHelper.removeSheet(pathCsv, 'Sheet')
-
-                self.email.send_email_file(pathCsv, fileName, df_receive, clientId, subject_prefix='AlphaReporter')
+                to_receiver = df_receive.iloc[0, :]['to_receiver'].split(';')
+                cc_receiver = df_receive.iloc[0, :]['cc_receiver'].split(';')
+                clientName = df_receive.iloc[0, :]['clientName']
+                tradingDay = df_receive.iloc[0, :]['tradingDay']
+                subject = f'AlphaReporter:{clientName}_{tradingDay}'
+                self.email.send_email_file(pathCsv, fileName, to_receiver=to_receiver, cc_receiver=cc_receiver,
+                                           subject=subject)
                 self.email.content = ''
                 self.logger.info(f'calculator: {tradingDay}__{clientId} successfully')
 
@@ -594,16 +599,16 @@ class AlphaReporter(object):
             series_normal_passive = (df[(df['signalType'] == 'Normal') & (df['category'] == 'Passive')]['cumQty'])
             cumQtyNormalPassive = 0 if len(series_normal_passive) == 0 else series_normal_passive.values[0][0]
             series_normal_ultraPassive = (
-            df[(df['signalType'] == 'Normal') & (df['category'] == 'UltraPassive')]['cumQty'])
+                df[(df['signalType'] == 'Normal') & (df['category'] == 'UltraPassive')]['cumQty'])
             cumQtyNormalUltraPassive = 0 if len(series_normal_ultraPassive) == 0 else \
-            series_normal_ultraPassive.values[0][0]
+                series_normal_ultraPassive.values[0][0]
             normalRate.append(
                 0 if cumQtyNormalUltraPassive == 0 else round(cumQtyNormalPassive / cumQtyNormalUltraPassive, 4))
 
             series_reve_passive = (df[(df['signalType'] == 'Reverse') & (df['category'] == 'Passive')]['cumQty'])
             cumQtyRevePassive = 0 if len(series_reve_passive) == 0 else series_reve_passive.values[0][0]
             series_normal_ultraPassive = (
-            df[(df['signalType'] == 'Reverse') & (df['category'] == 'UltraPassive')]['cumQty'])
+                df[(df['signalType'] == 'Reverse') & (df['category'] == 'UltraPassive')]['cumQty'])
             cumQtyReveUltraPassive = 0 if len(series_normal_ultraPassive) == 0 else \
                 series_normal_ultraPassive.values[0][0]
             reveRate.append(0 if cumQtyReveUltraPassive == 0 else round(cumQtyRevePassive / cumQtyReveUltraPassive, 4))
