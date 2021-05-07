@@ -14,6 +14,8 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.header import Header
 from configparser import RawConfigParser
+from email import encoders
+from email.mime.base import MIMEBase
 import Log
 
 
@@ -137,6 +139,57 @@ class EmailHelper(object):
         att1["Content-Type"] = 'application/octet-stream'
         # 这里的filename可以任意写，写什么名字，邮件中显示什么名字
         att1["Content-Disposition"] = f'attachment; filename="{file_name}"'
+        message.attach(att1)
+        try:
+            smtpObj = smtplib.SMTP()
+            smtpObj.connect(self.server)
+            smtpObj.login(self.sender, self.pwd)
+            smtpObj.sendmail(self.sender, self.receivers, message.as_string())
+            print("邮件发送成功")
+        except smtplib.SMTPException as e:
+            print(e)
+            print("Error: 无法发送邮件")
+
+    def send_email_zip(self, zip_file, filename, df_receive, subject_prefix='算法交易报告'):
+        """
+        发送带文件的邮件
+        :param file_path:邮件路径
+        :param file_name:邮件中文件名称
+        :param subject:邮件主题
+        """
+        if len(self.content) == 0:
+            return
+        if df_receive.shape[0] == 0:
+            return
+        to_receiver = df_receive.iloc[0, :]['to_receiver'].split(';')
+        cc_receiver = df_receive.iloc[0, :]['cc_receiver'].split(';')
+        clientName = df_receive.iloc[0, :]['clientName']
+        tradingDay = df_receive.iloc[0, :]['tradingDay']
+        subject = f'{subject_prefix}:{clientName}_{tradingDay}'
+        # 创建一个带附件的实例
+        message = MIMEMultipart()
+        message['From'] = self.sender
+        message['To'] = ";".join(to_receiver)
+        message['Cc'] = ";".join(cc_receiver)
+        message['Subject'] = Header(subject, 'utf-8')
+        message["Content-Disposition"] = 'attachment; filename="' + filename
+        self.receivers = list(set(to_receiver + cc_receiver))
+
+        # 邮件正文内容
+        message.attach(MIMEText(self.content, 'plain', 'utf-8'))
+
+        with open(zip_file, 'rb') as f:
+            # 设置附件的MIME和文件名，这里是rar类型:
+            att1 = MIMEBase('rar', 'rar', filename=zip_file)
+            # 加上必要的头信息:
+            att1.add_header('Content-Disposition', 'attachment', filename=filename)
+            att1.add_header('Content-ID', '<0>')
+            att1.add_header('X-Attachment-Id', '0')
+            # 把附件的内容读进来:
+            att1.set_payload(f.read())
+            # 用Base64编码
+        encoders.encode_base64(att1)
+        # 添加到MIMEMultipart
         message.attach(att1)
         try:
             smtpObj = smtplib.SMTP()

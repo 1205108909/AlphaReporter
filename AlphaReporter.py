@@ -79,7 +79,7 @@ class AlphaReporter(object):
         ivwap = []
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
-                stmt = f"select * from ClientOrder where orderid in(SELECT distinct(orderid) FROM ExchangeOrder where orderid in(SELECT orderid FROM ClientOrder where clientId = \'{clientId}\' and tradingDay=\'{tradingday}\')) order by slipageInBps asc, cumqty desc"
+                stmt = f"select * from ClientOrder where orderid in(SELECT distinct(orderid) FROM ExchangeOrder where orderid in(SELECT orderid FROM ClientOrder where clientId like \'{clientId}\' and tradingDay=\'{tradingday}\' and algo <> 4 and algo <> 6)) order by slipageInBps asc, cumqty desc"
                 cursor.execute(stmt)
                 for row in cursor:
                     symbol.append(row['symbol'])
@@ -121,7 +121,7 @@ class AlphaReporter(object):
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
                 # stmt = f"select * from ClientOrder where orderid in(SELECT distinct(orderid) FROM ExchangeOrder where orderid not in(SELECT orderid FROM ClientOrder where clientId = \'{clientId}\' and tradingDay=\'{tradingday}\')and  signalside>0) order by slipageInBps asc, cumqty desc"
-                stmt = f"   select * from ClientOrder where  clientId = \'{clientId}\' and tradingDay=\'{tradingday}\' and orderid not in(SELECT  distinct(orderid) FROM ExchangeOrder where orderid in(SELECT orderid FROM ClientOrder where clientId = \'{clientId}\' and tradingDay=\'{tradingday}\') and  signalside>0)  order by slipageInBps asc"
+                stmt = f"select * from ClientOrder where  clientId like \'{clientId}\' and tradingDay=\'{tradingday}\' and orderid not in(SELECT  distinct(orderid) FROM ExchangeOrder where orderid in(SELECT orderid FROM ClientOrder where clientId like \'{clientId}\' and tradingDay=\'{tradingday}\') and  signalside>0 and algo <> 4 and algo <> 6)  order by slipageInBps asc"
                 cursor.execute(stmt)
                 for row in cursor:
                     symbol.append(row['symbol'])
@@ -162,7 +162,7 @@ class AlphaReporter(object):
         ivwap = []
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
-                stmt = f"select * from ClientOrder where orderid in(SELECT distinct(orderid) FROM ExchangeOrder where orderid in(SELECT orderid FROM ClientOrder where clientId = \'{clientId}\' and tradingDay=\'{tradingday}\')and  signalside>0) order by slipageInBps asc, cumqty desc"
+                stmt = f"select * from ClientOrder where orderid in(SELECT distinct(orderid) FROM ExchangeOrder where orderid in(SELECT orderid FROM ClientOrder where clientId like \'{clientId}\' and tradingDay=\'{tradingday}\')and  signalside>0 and algo <> 4 and algo <> 6) order by slipageInBps asc, cumqty desc"
                 cursor.execute(stmt)
                 for row in cursor:
                     symbol.append(row['symbol'])
@@ -197,7 +197,7 @@ class AlphaReporter(object):
         signalType = []
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
-                stmt = f"SELECT	a.orderId,	a.symbol,	a.tradingDay,	a.side,	b.alphaPrice,	b.cumQty,	a.exDestination AS exDestination,	a.effectiveTime,	a.expireTime,	a.avgPrice,	(CASE	WHEN a.side = 1 THEN (a.iVWP - b.alphaPrice) / a.iVWP	ELSE (b.alphaPrice - a.iVWP) / a.iVWP	END) AS delta,b.signalType FROM	(SELECT orderId, tradingDay, side, avgPrice, symbol, exDestination, effectiveTime,expireTime,iVWP	FROM ClientOrder WHERE	clientId = \'{clientId}\') a JOIN (SELECT	orderId,	SUM (cumQty * sliceAvgPrice) / (CASE WHEN SUM (cumQty) > 0 THEN	SUM (cumQty) ELSE	NULL END) AS alphaPrice,SUM (cumQty) AS cumQty,	CASE WHEN (TEXT LIKE '%Sell%LongHolding%' OR TEXT LIKE '%Buy%ShortHolding%'	) THEN 'Reverse' WHEN ( TEXT LIKE '%Buy%LongHolding%' OR TEXT LIKE '%Sell%ShortHolding%' ) THEN 'Forward'	WHEN (TEXT LIKE '%ToNormal%') THEN		'Close'	WHEN decisionType = '22' THEN		'First1'	ELSE		'Normal'	END AS signalType	FROM ExchangeOrder	WHERE		cumQty > 0	GROUP BY		orderId,		CASE	WHEN (		TEXT LIKE '%Sell%LongHolding%'		OR TEXT LIKE '%Buy%ShortHolding%'	) THEN		'Reverse'	WHEN (		TEXT LIKE '%Buy%LongHolding%'	OR TEXT LIKE '%Sell%ShortHolding%') THEN 'Forward' WHEN (TEXT LIKE '%ToNormal%') THEN	'Close'	WHEN decisionType = '22' THEN	'First1' ELSE	'Normal'	END) b ON a.orderId = b.orderId AND a.tradingDay = \'{tradingDay}\'"
+                stmt = f"SELECT	a.orderId,	a.symbol,	a.tradingDay,	a.side,	b.alphaPrice,	b.cumQty,	a.exDestination AS exDestination,	a.effectiveTime,	a.expireTime,	a.avgPrice,	(CASE	WHEN a.iVWP = 0 THEN 0 ELSE	CASE WHEN a.side = 1 THEN	(a.iVWP - b.alphaPrice) / a.iVWP ELSE (b.alphaPrice - a.iVWP) / a.iVWP	END	END	) AS delta,b.signalType FROM	(SELECT orderId, tradingDay, side, avgPrice, symbol, exDestination, effectiveTime,expireTime,iVWP	FROM ClientOrder WHERE	clientId like \'{clientId}\' and algo <> 4 and algo <> 6) a JOIN (SELECT	orderId,	SUM (cumQty * sliceAvgPrice) / (CASE WHEN SUM (cumQty) > 0 THEN	SUM (cumQty) ELSE	NULL END) AS alphaPrice,SUM (cumQty) AS cumQty,	CASE WHEN (TEXT LIKE '%Sell%LongHolding%' OR TEXT LIKE '%Buy%ShortHolding%'	) THEN 'Reverse' WHEN ( TEXT LIKE '%Buy%LongHolding%' OR TEXT LIKE '%Sell%ShortHolding%' ) THEN 'Forward'	WHEN (TEXT LIKE '%ToNormal%') THEN		'Close'	WHEN decisionType = '22' THEN		'First1'	ELSE		'Normal'	END AS signalType	FROM ExchangeOrder	WHERE		cumQty > 0	GROUP BY		orderId,		CASE	WHEN (		TEXT LIKE '%Sell%LongHolding%'		OR TEXT LIKE '%Buy%ShortHolding%'	) THEN		'Reverse'	WHEN (		TEXT LIKE '%Buy%LongHolding%'	OR TEXT LIKE '%Sell%ShortHolding%') THEN 'Forward' WHEN (TEXT LIKE '%ToNormal%') THEN	'Close'	WHEN decisionType = '22' THEN	'First1' ELSE	'Normal'	END) b ON a.orderId = b.orderId AND a.tradingDay = \'{tradingDay}\'"
                 cursor.execute(stmt)
                 for row in cursor:
                     symbol.append(row['symbol'])
@@ -227,7 +227,7 @@ class AlphaReporter(object):
         slipage = []
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
-                stmt = f"SELECT signalType AS signalType, expireTime AS expireTime, SUM (c.cumQty * c.alphaPrice) AS amount, SUM(delta * c.cumQty * c.alphaPrice ) / SUM(c.cumQty * c.alphaPrice) AS slipage FROM(SELECT a.orderId,a.symbol,a.expireTime,a.tradingDay,a.side,b.alphaPrice,b.cumQty,a.avgPrice,a.cumQty AS clientQty,(CASE	WHEN a.side = 1 THEN (a.iVWP - b.alphaPrice) / a.iVWP	ELSE (b.alphaPrice - a.iVWP) / a.iVWP	END) AS delta,b.signalType FROM(SELECT orderId,tradingDay,side,avgPrice, symbol,iVWP,cumQty,expireTime FROM ClientOrder	WHERE	clientId LIKE \'{clientId}\') a	JOIN (SELECT orderId,SUM (cumQty * sliceAvgPrice)/(CASE WHEN SUM (cumQty) > 0 THEN	SUM (cumQty)	ELSE	NULL	END) AS alphaPrice,	SUM (cumQty) AS cumQty,	CASE WHEN (signalSide > 0) THEN	'Signal' ELSE 'Normal' END AS signalType FROM	ExchangeOrder WHERE cumQty>0 GROUP BY orderId,CASE WHEN (signalSide > 0) THEN	'Signal' ELSE 'Normal' END,expireTime) b ON a.orderId = b.orderId AND a.tradingDay = \'{tradingDay}\') c GROUP BY signalType,expireTime"
+                stmt = f"SELECT signalType AS signalType, expireTime AS expireTime, SUM (c.cumQty * c.alphaPrice) AS amount, SUM(delta * c.cumQty * c.alphaPrice ) / SUM(c.cumQty * c.alphaPrice) AS slipage FROM(SELECT a.orderId,a.symbol,a.expireTime,a.tradingDay,a.side,b.alphaPrice,b.cumQty,a.avgPrice,a.cumQty AS clientQty,(CASE	WHEN a.iVWP = 0 THEN 0 ELSE	CASE WHEN a.side = 1 THEN	(a.iVWP - b.alphaPrice) / a.iVWP ELSE (b.alphaPrice - a.iVWP) / a.iVWP END END) AS delta,b.signalType FROM(SELECT orderId,tradingDay,side,avgPrice, symbol,iVWP,cumQty,expireTime FROM ClientOrder	WHERE	clientId LIKE \'{clientId}\' and algo <> 4 and algo <> 6) a	JOIN (SELECT orderId,SUM (cumQty * sliceAvgPrice)/(CASE WHEN SUM (cumQty) > 0 THEN	SUM (cumQty)	ELSE	NULL	END) AS alphaPrice,	SUM (cumQty) AS cumQty,	CASE WHEN (signalSide > 0) THEN	'Signal' ELSE 'Normal' END AS signalType FROM	ExchangeOrder WHERE cumQty>0 GROUP BY orderId,CASE WHEN (signalSide > 0) THEN	'Signal' ELSE 'Normal' END,expireTime) b ON a.orderId = b.orderId AND a.tradingDay = \'{tradingDay}\') c GROUP BY signalType,expireTime"
                 cursor.execute(stmt)
                 for row in cursor:
                     signalType.append(row['signalType'])
@@ -250,7 +250,7 @@ class AlphaReporter(object):
         slipage = []
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
-                stmt = f"SELECT c.side AS side,expireTime AS expireTime,SUM (c.cumQty * c.alphaPrice) AS amount,	SUM (delta * c.cumQty * c.alphaPrice) / SUM (c.cumQty * c.alphaPrice) AS slipage FROM	(SELECT	a.orderId,a.symbol,a.expireTime,a.tradingDay,	a.side,b.alphaPrice,b.cumQty,a.avgPrice,	a.cumQty AS clientQty,(CASE	WHEN a.side = 1 THEN (a.iVWP - b.alphaPrice) / a.iVWP	ELSE(b.alphaPrice - a.iVWP) / a.iVWP END) AS delta FROM	(SELECT	orderId,tradingDay,side,avgPrice,symbol,iVWP,cumQty,expireTime FROM	ClientOrder	WHERE clientId LIKE \'{clientId}\') a JOIN (SELECT orderId,SUM (cumQty * sliceAvgPrice)/(CASE WHEN SUM (cumQty)>0 THEN SUM (cumQty) ELSE	NULL END) AS alphaPrice,SUM (cumQty) AS cumQty FROM	ExchangeOrder WHERE	cumQty > 0 GROUP BY	orderId,expireTime) b ON a.orderId = b.orderId	AND a.tradingDay = \'{tradingDay}\') c GROUP BY	side,expireTime"
+                stmt = f"SELECT c.side AS side,expireTime AS expireTime,SUM (c.cumQty * c.alphaPrice) AS amount,	SUM (delta * c.cumQty * c.alphaPrice) / SUM (c.cumQty * c.alphaPrice) AS slipage FROM	(SELECT	a.orderId,a.symbol,a.expireTime,a.tradingDay,	a.side,b.alphaPrice,b.cumQty,a.avgPrice,	a.cumQty AS clientQty,(CASE	WHEN a.iVWP = 0 THEN 0 ELSE	CASE WHEN a.side = 1 THEN	(a.iVWP - b.alphaPrice) / a.iVWP ELSE (b.alphaPrice - a.iVWP) / a.iVWP END END) AS delta FROM	(SELECT	orderId,tradingDay,side,avgPrice,symbol,iVWP,cumQty,expireTime FROM	ClientOrder	WHERE clientId LIKE \'{clientId}\' and algo <> 4 and algo <> 6) a JOIN (SELECT orderId,SUM (cumQty * sliceAvgPrice)/(CASE WHEN SUM (cumQty)>0 THEN SUM (cumQty) ELSE	NULL END) AS alphaPrice,SUM (cumQty) AS cumQty FROM	ExchangeOrder WHERE	cumQty > 0 GROUP BY	orderId,expireTime) b ON a.orderId = b.orderId	AND a.tradingDay = \'{tradingDay}\') c GROUP BY	side,expireTime"
                 cursor.execute(stmt)
                 for row in cursor:
                     side.append(row['side'])
@@ -285,6 +285,10 @@ class AlphaReporter(object):
 
     def run(self, tradingDays, clientIds):
         for tradingDay in tradingDays:
+            dir_data = os.path.join(f'Data/AlphaReporter/{tradingDay}')
+            if not os.path.exists(dir_data):
+                os.makedirs(dir_data)
+
             for clientId in clientIds:
                 self.logger.info(f'start calculator: {tradingDay}__{clientId}')
                 self.email.add_email_content(f'{tradingDay}_({clientId})统计报告，请查收')
@@ -448,7 +452,7 @@ class AlphaReporter(object):
                                           index=[1])
                 df_receive['tradingDay'] = tradingDay
                 fileName = f'AlphaReporter_{tradingDay}_({clientId}).xlsx'
-                pathCsv = os.path.join(f'Data/{fileName}')
+                pathCsv = os.path.join(dir_data, fileName)
 
                 ExcelHelper.createExcel(pathCsv)
                 ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=df_total_effect,
@@ -474,18 +478,9 @@ class AlphaReporter(object):
                                                interval=3, sheet_name=clientId)
 
                 self.calSignalEffect(clientId, pathCsv, tradingDay, tradingDay, 0)
-                # for clientId in self.ClientIDs:
-                #     if len(clientId) == 0:
-                #         continue
-                #     self.calSignalEffect(clientId, pathCsv, tradingDay, tradingDay, 0)
-                # for accountId in self.AccountIDs:
-                #     if len(accountId) == 0:
-                #         continue
-                #     self.calSignalEffect(accountId, pathCsv, tradingDay, tradingDay, 1)
-
                 ExcelHelper.removeSheet(pathCsv, 'Sheet')
 
-                self.email.send_email_file(pathCsv, fileName, df_receive, clientId,subject_prefix='AlphaReporter')
+                self.email.send_email_file(pathCsv, fileName, df_receive, clientId, subject_prefix='AlphaReporter')
                 self.email.content = ''
                 self.logger.info(f'calculator: {tradingDay}__{clientId} successfully')
 
@@ -501,8 +496,9 @@ class AlphaReporter(object):
         if dfSignalEffect.shape[0] > 0:
             dfSignalEffect = dfSignalEffect.merge(dfTurnoverRatio, left_on='type', right_on=dfTurnoverRatio.index,
                                                   how='left')
-            dfSignalEffect = dfSignalEffect[
-                ['Id', 'type', 'turnover', 'slipage', 'Aggressive', 'Passive', 'UltraPassive']]
+            list_columns = ['Id', 'type', 'turnover', 'slipage', 'Aggressive', 'Passive', 'UltraPassive']
+
+            dfSignalEffect = dfSignalEffect[list_columns]
             dfSignalEffect['type'] = dfSignalEffect['type'].map(lambda x: Constants.SingalType2Chn[x])
         # 3. passive/ultraPassive 比例
         try:
@@ -552,7 +548,7 @@ class AlphaReporter(object):
             return df
 
         except Exception as e:
-            self.Log.error(e)
+            self.logger.error(e)
             return pd.DataFrame()
 
     def _statTurnOverRatio(self, start, end, clientId, isClient):
@@ -574,6 +570,14 @@ class AlphaReporter(object):
 
         df = pd.DataFrame({'category': category, 'signalType': signalType, 'cumQty': cumQty, 'orderQty': orderQty,
                            'fillRatio': fillRatio})
+        list_standand = [1, 2, 3]
+
+        diffs = list(set(list_standand).difference(set(df['category'])))
+        for index in diffs:
+            df = df.append({'category': index, 'signalType': 'Normal', 'cumQty': [0], 'orderQty': [0],
+                            'fillRatio': 0},
+                           ignore_index=True)
+
         dfpivot = df.pivot(index='signalType', columns='category', values='fillRatio')
         return dfpivot, df
 
@@ -586,24 +590,28 @@ class AlphaReporter(object):
 
             ids.append(id)
             type.append('passive/ultraPassive')
-            cumQtyNormalPassive = \
-                (df[(df['signalType'] == 'Normal') & (df['category'] == 'Passive')]['cumQty']).values[0][
-                    0]
-            cumQtyNormalUltraPassive = \
-                (df[(df['signalType'] == 'Normal') & (df['category'] == 'UltraPassive')]['cumQty']).values[0][0]
-            normalRate.append(round(cumQtyNormalPassive / cumQtyNormalUltraPassive, 4))
 
-            cumQtyRevePassive = \
-                (df[(df['signalType'] == 'Reverse') & (df['category'] == 'Passive')]['cumQty']).values[0][0]
-            cumQtyReveUltraPassive = \
-                (df[(df['signalType'] == 'Reverse') & (df['category'] == 'UltraPassive')]['cumQty']).values[0][0]
-            reveRate.append(round(cumQtyRevePassive / cumQtyReveUltraPassive, 4))
+            series_normal_passive = (df[(df['signalType'] == 'Normal') & (df['category'] == 'Passive')]['cumQty'])
+            cumQtyNormalPassive = 0 if len(series_normal_passive) == 0 else series_normal_passive.values[0][0]
+            series_normal_ultraPassive = (
+            df[(df['signalType'] == 'Normal') & (df['category'] == 'UltraPassive')]['cumQty'])
+            cumQtyNormalUltraPassive = 0 if len(series_normal_ultraPassive) == 0 else \
+            series_normal_ultraPassive.values[0][0]
+            normalRate.append(
+                0 if cumQtyNormalUltraPassive == 0 else round(cumQtyNormalPassive / cumQtyNormalUltraPassive, 4))
+
+            series_reve_passive = (df[(df['signalType'] == 'Reverse') & (df['category'] == 'Passive')]['cumQty'])
+            cumQtyRevePassive = 0 if len(series_reve_passive) == 0 else series_reve_passive.values[0][0]
+            series_normal_ultraPassive = (
+            df[(df['signalType'] == 'Reverse') & (df['category'] == 'UltraPassive')]['cumQty'])
+            cumQtyReveUltraPassive = 0 if len(series_normal_ultraPassive) == 0 else \
+                series_normal_ultraPassive.values[0][0]
+            reveRate.append(0 if cumQtyReveUltraPassive == 0 else round(cumQtyRevePassive / cumQtyReveUltraPassive, 4))
 
             df = pd.DataFrame({'id': ids, 'description': type, 'normalRate': normalRate, 'reverseRate': reveRate})
-
             return df
         except Exception as e:
-            self.Log.error(e)
+            self.logger.error(e)
             return pd.DataFrame()
 
     def _statSlipageInBps(self, start, end, Id, isClient):
@@ -617,7 +625,7 @@ class AlphaReporter(object):
         idtype = "clientId" if isClient == 0 else "accountId"
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
-                sql = f"SELECT symbol,side, orderQty, slipageInBps, effectiveTime, expireTime FROM ClientOrderView WHERE {idtype} LIKE \'{Id}\' AND tradingDay >= \'{start}\' AND tradingDay <= \'{end}\' AND avgPrice * cumQty > 100000 ORDER BY slipageInBps"
+                sql = f"SELECT symbol,side, orderQty, slipageInBps, effectiveTime, expireTime FROM ClientOrderView WHERE {idtype} LIKE \'{Id}\' AND tradingDay >= \'{start}\' AND tradingDay <= \'{end}\' AND avgPrice * cumQty > 100000 and algo <> 'POV' and algo <> 'PEGGING' ORDER BY slipageInBps"
                 cursor.execute(sql)
                 for row in cursor:
                     ids.append(Id)

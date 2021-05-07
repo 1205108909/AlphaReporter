@@ -1,16 +1,18 @@
-import pymssql
-import pandas as pd
-import h5py
-import sys
-import Log
-import os
-import numpy as np
-from configparser import RawConfigParser
 import datetime
+import os
+import sys
+import zipfile
 
+import h5py
+import numpy as np
+import pandas as pd
+import pymssql
+
+import Log
+from Constants import OrderReportID
+from DataSender.EmailHelper import EmailHelper
 from DataSender.ExcelHelper import ExcelHelper
 from DataService.JYDataLoader import JYDataLoader
-from DataSender.EmailHelper import EmailHelper
 
 # 显示所有列
 pd.set_option('display.max_columns', None)
@@ -26,7 +28,7 @@ class IdType(Enum):
 
 
 class OrderReporter(object):
-    def __init__(self, start, end, clientIds, accountIds):
+    def __init__(self, start, end):
         self.logger = Log.get_logger(__name__)
         self.tick_path = "Y:/Data/h5data/stock/tick/"
         self.server = "172.10.10.7"
@@ -37,11 +39,13 @@ class OrderReporter(object):
 
         jyloader = JYDataLoader()
         tradingdays = jyloader.get_tradingday(start, end)
-        clientIDs = list(clientIds.split(';'))
-        accountIDs = list(accountIds.split(';'))
+        clientIds = OrderReportID.clientId
+        accountIds = OrderReportID.accountId
+        zipClientIds = OrderReportID.zipClientId
         self.email = EmailHelper.instance()
-        all_ids = {IdType.clientId: clientIDs, IdType.accountId: accountIDs}
-        self.run(tradingdays, all_ids)
+        one_2_one_id = {IdType.clientId: clientIds, IdType.accountId: accountIds}
+        one_2_mul_id = {IdType.clientId: zipClientIds}
+        self.run(tradingdays, one_2_one_id, one_2_mul_id)
 
     def get_connection(self):
         try:
@@ -51,17 +55,20 @@ class OrderReporter(object):
             print(e)
 
     def get_receiveList(self, id_type, id):
+        if id == '':
+            return pd.DataFrame()
         accountIds = []
         clientIds = []
         clientName = []
         to_receiver = []
         cc_receiver = []
+        id = id + '%'
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
                 if id_type == IdType.clientId:
-                    stmt = f"select * from Clients where clientId = \'{id}\'"
+                    stmt = f"select * from ClientsForPy where clientId like \'{id}\'"
                 else:
-                    stmt = f"select * from Clients where accountId = \'{id}\'"
+                    stmt = f"select * from ClientsForPy where accountId like \'{id}\'"
                 cursor.execute(stmt)
                 for row in cursor:
                     accountIds.append(row['accountId'])
@@ -97,9 +104,9 @@ class OrderReporter(object):
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
                 if id_type == IdType.clientId:
-                    stmt = f"select * from ClientOrderView where orderQty>0 and (securityType='RPO' or securityType='EQA') and tradingDay = \'{tradingday}\' and clientId like \'{id}\'"
+                    stmt = f"select * from ClientOrderView where orderQty>0 and (securityType='RPO' or securityType='EQA') and tradingDay = \'{tradingday}\' and clientId like \'{id}\' AND algo <> 'POV' AND algo <> 'PEGGING'"
                 else:
-                    stmt = f"select * from ClientOrderView where orderQty>0 and (securityType='RPO' or securityType='EQA') and tradingDay = \'{tradingday}\' and accountId like \'{id}\'"
+                    stmt = f"select * from ClientOrderView where orderQty>0 and (securityType='RPO' or securityType='EQA') and tradingDay = \'{tradingday}\' and accountId like \'{id}\' AND algo <> 'POV' AND algo <> 'PEGGING'"
                 cursor.execute(stmt)
                 for row in cursor:
                     orderId.append(row['orderId'])
@@ -134,9 +141,9 @@ class OrderReporter(object):
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
                 if id_type == IdType.clientId:
-                    stmt = f"SELECT a.orderId, sliceStatus, sliceCount FROM ClientOrderView a JOIN (SELECT orderId,orderStatus AS sliceStatus,COUNT (*) AS sliceCount FROM ExchangeOrderView WHERE orderStatus IN ('Filled', 'Canceled') GROUP BY orderId,orderStatus) b ON a.orderId = b.orderId WHERE a.tradingDay = \'{tradingday}\' AND a.clientId like \'{id}\' ORDER BY a.orderId"
+                    stmt = f"SELECT a.orderId, sliceStatus, sliceCount FROM ClientOrderView a JOIN (SELECT orderId,orderStatus AS sliceStatus,COUNT (*) AS sliceCount FROM ExchangeOrderView WHERE orderStatus IN ('Filled', 'Canceled') GROUP BY orderId,orderStatus) b ON a.orderId = b.orderId WHERE a.tradingDay = \'{tradingday}\' AND a.clientId like \'{id}\' AND a.algo <> 'POV' AND a.algo <> 'PEGGING'  ORDER BY a.orderId"
                 else:
-                    stmt = f"SELECT a.orderId, sliceStatus, sliceCount FROM ClientOrderView a JOIN (SELECT orderId,orderStatus AS sliceStatus,COUNT (*) AS sliceCount FROM ExchangeOrderView WHERE orderStatus IN ('Filled', 'Canceled') GROUP BY orderId,orderStatus) b ON a.orderId = b.orderId WHERE a.tradingDay = \'{tradingday}\' AND a.accountId like \'{id}\' ORDER BY a.orderId"
+                    stmt = f"SELECT a.orderId, sliceStatus, sliceCount FROM ClientOrderView a JOIN (SELECT orderId,orderStatus AS sliceStatus,COUNT (*) AS sliceCount FROM ExchangeOrderView WHERE orderStatus IN ('Filled', 'Canceled') GROUP BY orderId,orderStatus) b ON a.orderId = b.orderId WHERE a.tradingDay = \'{tradingday}\' AND a.algo <> 'POV' AND a.algo <> 'PEGGING'  AND a.accountId like \'{id}\' ORDER BY a.orderId"
                 cursor.execute(stmt)
                 for row in cursor:
                     orderId.append(row['orderId'])
@@ -168,9 +175,9 @@ class OrderReporter(object):
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
                 if id_type == IdType.clientId:
-                    stmt = f"SELECT a.sliceId, a.orderId, b.side,b.symbol,a.effectiveTime,a.qty,a.cumQty,a.leavesQty,a.price,a.sliceAvgPrice,a.orderStatus from ExchangeOrderView a join ClientOrderView b on a.orderId=b.orderId where a.orderStatus in ('Filled','Canceled') AND b.tradingDay = \'{tradingday}\' AND b.clientId like \'{id}\'"
+                    stmt = f"SELECT a.sliceId, a.orderId, b.side,b.symbol,a.effectiveTime,a.qty,a.cumQty,a.leavesQty,a.price,a.sliceAvgPrice,a.orderStatus from ExchangeOrderView a join ClientOrderView b on a.orderId=b.orderId where a.orderStatus in ('Filled','Canceled') AND b.tradingDay = \'{tradingday}\' AND b.clientId like \'{id}\' AND b.algo <> 'POV' AND b.algo <> 'PEGGING'"
                 else:
-                    stmt = f"SELECT a.sliceId, a.orderId, b.side,b.symbol,a.effectiveTime,a.qty,a.cumQty,a.leavesQty,a.price,a.sliceAvgPrice,a.orderStatus from ExchangeOrderView a join ClientOrderView b on a.orderId=b.orderId where a.orderStatus in ('Filled','Canceled') AND b.tradingDay = \'{tradingday}\' AND b.accountId like \'{id}\'"
+                    stmt = f"SELECT a.sliceId, a.orderId, b.side,b.symbol,a.effectiveTime,a.qty,a.cumQty,a.leavesQty,a.price,a.sliceAvgPrice,a.orderStatus from ExchangeOrderView a join ClientOrderView b on a.orderId=b.orderId where a.orderStatus in ('Filled','Canceled') AND b.tradingDay = \'{tradingday}\' AND b.accountId like \'{id}\' AND b.algo <> 'POV' AND b.algo <> 'PEGGING'"
                 cursor.execute(stmt)
                 for row in cursor:
                     sliceId.append(row['sliceId'])
@@ -254,7 +261,22 @@ class OrderReporter(object):
         pnl_yuan = slipage * amt
         return amt, slipage, pnl_yuan
 
-    def run(self, tradingDays, dict_ids):
+    def compress_file(self, folderPath, compressPathName):
+        '''
+        :param folderPath: 文件夹路径
+        :param compressPathName: 压缩包路径
+        '''
+        zip_full_file = os.path.join(folderPath, compressPathName)
+        with zipfile.ZipFile(zip_full_file, 'w') as zip:
+            for dirpath, dirNames, fileNames in os.walk(folderPath):
+                fpath = dirpath.replace(folderPath, '')  # 这一句很重要，不replace的话，就从根目录开始复制
+                fpath = fpath and fpath + os.sep or ''  # 这句话理解我也点郁闷，实现当前文件夹以及包含的所有文件的压缩
+                for filename in fileNames:
+                    if not filename.endswith('xlsx'):
+                        continue
+                    zip.write(os.path.join(dirpath, filename), fpath + filename)
+
+    def run(self, tradingDays, dict_ids, one_2_mul_id):
         def cal_twap(tradingDay, effectiveTime, expireTime, symbol, price, side, cumQty):
             if cumQty == 0:
                 return 0
@@ -275,6 +297,8 @@ class OrderReporter(object):
             expireTime = expireTime.hour * 10000000 + expireTime.minute * 100000 + expireTime.second * 1000
             self.logger.info(f'cal_ocp-{tradingDay}-{expireTime}-{symbol}')
             tick = read_tick(symbol, tradingDay)
+            if tick is None:
+                return None
             tick = tick[tick['Time'] <= expireTime]
             return tick.tail(1).iloc[0, :]['Price']
 
@@ -293,7 +317,8 @@ class OrderReporter(object):
             """
             with h5py.File(os.path.join(self.tick_path, ''.join([tradingday, '.h5'])), 'r') as f:
                 if symbol not in f.keys():
-                    raise Exception(f'{tradingday}_{symbol} tick 为空')
+                    return None
+                    # raise Exception(f'{tradingday}_{symbol} tick 为空')
                 time = f[symbol]['Time']
                 if len(time) == 0:
                     raise Exception(f'{tradingday}_{symbol} tick 为空')
@@ -305,106 +330,136 @@ class OrderReporter(object):
 
             return tick
 
+        def cal_client_exchange_summary(tradingDay, id_type, id):
+            df_client_order = self.get_clientOrder(tradingDay, id_type, id)
+            if len(df_client_order) == 0:
+                return False
+            df_client_order_count = self.get_client_order_count(tradingDay, id_type, id)
+            df_client_order_count['sliceStatus'] = df_client_order_count['sliceStatus'].map(
+                lambda x: x + 'Count')
+            df_client_order_count = df_client_order_count.pivot(index='orderId', columns='sliceStatus',
+                                                                values='sliceCount')
+            df_client_order = df_client_order.merge(df_client_order_count, how='left', left_on='orderId',
+                                                    right_index=True)
+            df_client_order.fillna(0, inplace=True)
+            df_client_order.sort_values(by=['effectiveTime'], inplace=True)
+
+            # 调整列顺序
+            VWAPs = df_client_order.pop('VWAP')
+            df_client_order.insert(df_client_order.shape[1], 'VWAP', VWAPs)
+            slipageByVWAPs = df_client_order.pop('slipageByVWAP')
+            df_client_order.insert(df_client_order.shape[1], 'slipageByVWAP', slipageByVWAPs)
+
+            # 1.计算twap
+            df_client_order['TWAP'] = df_client_order.apply(
+                lambda x: cal_twap(tradingDay, x['effectiveTime'], x['expireTime'], x['symbol'], x['avgPrice'],
+                                   x['side'], x['cumQty']), axis=1)
+
+            # 2.计算slipageByTwap
+            df_client_order['slipageByTWAP'] = df_client_order.apply(
+                lambda x: cal_twap_slipage(x['TWAP'], x['side'], x['avgPrice']), axis=1)
+            df_client_order.loc[df_client_order.loc[:, 'cumQty'] == 0, ['slipageByTWAP']] = 0.00
+            df_client_order['TWAP'] = round(df_client_order['TWAP'], 5)
+            df_client_order['slipageByTWAP'] = round(df_client_order['slipageByTWAP'] * 10000, 2)
+
+            # 3.计算OrderClosePx
+            df_client_order['OCP'] = df_client_order.apply(
+                lambda x: cal_ocp(tradingDay, x['expireTime'], x['symbol'], x['cumQty']), axis=1)
+            df_client_order['slipageByOCP'] = df_client_order.apply(
+                lambda x: cal_ocp_slipage(x['OCP'], x['side'], x['avgPrice']), axis=1)
+            df_client_order['slipageByOCP'] = round(df_client_order['slipageByOCP'] * 10000, 2)
+
+            df_exchange_order = self.get_exchangeOrder(tradingday=tradingDay, id_type=id_type, id=id)
+
+            buy_amt, buy_vwap_slipage, buy_pnl_vwap_yuan = self.stat_summary(df_client_order, 'Buy', 'VWAP')
+            buy_amt, buy_twap_slipage, buy_pnl_twap_yuan = self.stat_summary(df_client_order, 'Buy', 'TWAP')
+            buy_amt, buy_ocp_slipage, buy_pnl_ocp_yuan = self.stat_summary(df_client_order, 'Buy', 'OCP')
+
+            sell_amt, sell_vwap_slipage, sell_pnl_vwap_yuan = self.stat_summary(df_client_order, 'Sell', 'VWAP')
+            sell_amt, sell_twap_slipage, sell_pnl_twap_yuan = self.stat_summary(df_client_order, 'Sell', 'TWAP')
+            sell_amt, sell_ocp_slipage, sell_pnl_ocp_yuan = self.stat_summary(df_client_order, 'Sell', 'OCP')
+
+            df_summary = pd.DataFrame(
+                {'Side': ['Buy', 'Sell'],
+                 'FilledAmt(万元)': [round(buy_amt / 10000, 3), round(sell_amt / 10000, 3)],
+                 'PnL2VWAP(BPS)': [round(buy_vwap_slipage * 10000, 2),
+                                   round(sell_vwap_slipage * 10000, 2)],
+                 'PnL2TWAP(BPS)': [round(buy_twap_slipage * 10000, 2),
+                                   round(sell_twap_slipage * 10000, 2)],
+                 'PnL2OCP(BPS)': [round(buy_ocp_slipage * 10000, 2),
+                                  round(sell_ocp_slipage * 10000, 2)],
+                 'PnL2VWAP(YUAN)': [round(buy_pnl_vwap_yuan, 2),
+                                    round(sell_pnl_vwap_yuan, 2)],
+                 'PnL2TWAP(YUAN)': [round(buy_pnl_twap_yuan, 2),
+                                    round(sell_pnl_twap_yuan, 2)],
+                 'PnL2OCP(YUAN)': [round(buy_pnl_ocp_yuan, 2),
+                                   round(sell_pnl_ocp_yuan, 2)]
+                 }, index=[1, 2])
+
+            if (len(df_exchange_order) == 0) & (len(df_summary) == 0):
+                return False
+
+            ExcelHelper.createExcel(pathCsv)
+            df_client_order['effectiveTime'] = df_client_order['effectiveTime'].map(
+                lambda x: x.strftime('%H:%M:%S'))
+            df_client_order['expireTime'] = df_client_order['expireTime'].map(lambda x: x.strftime('%H:%M:%S'))
+            ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=df_summary, header=True,
+                                           sheet_name='algoSummary', sep_key='all_name')
+            ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=df_client_order,
+                                           header=True, sheet_name='algoClientOrder', sep_key='all_name')
+            ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=df_exchange_order,
+                                           header=True, sheet_name='algoExchangeOrder', sep_key='all_name')
+            ExcelHelper.removeSheet(pathCsv, 'Sheet')
+            self.logger.info(f'calculator: {tradingDay}__{id} successfully')
+            return True
+
         for tradingDay in tradingDays:
             if not os.path.exists(os.path.join(self.tick_path, tradingDay + '.h5')):
                 self.logger.error(f'{tradingDay} h5 tick is not existed.')
                 continue
+            dir_data = os.path.join(f'Data/OrderReporter/{tradingDay}')
+            if not os.path.exists(dir_data):
+                os.makedirs(dir_data)
+
             for id_type, ids in dict_ids.items():
                 for id in ids:
-                    self.logger.info(f'start calculator: {tradingDay}__{id_type}__{id}')
-                    clientOrders = self.get_clientOrder(tradingDay, id_type, id)
-                    if clientOrders.size == 0:
-                        continue
-                    df_client_order_count = self.get_client_order_count(tradingDay, id_type, id)
-                    df_client_order_count['sliceStatus'] = df_client_order_count['sliceStatus'].map(
-                        lambda x: x + 'Count')
-                    df_client_order_count = df_client_order_count.pivot(index='orderId', columns='sliceStatus',
-                                                                        values='sliceCount')
-                    clientOrders = clientOrders.merge(df_client_order_count, how='left', left_on='orderId',
-                                                      right_index=True)
-                    clientOrders.fillna(0, inplace=True)
-                    clientOrders.sort_values(by=['effectiveTime'], inplace=True)
-
-                    # 调整列顺序
-                    VWAPs = clientOrders.pop('VWAP')
-                    clientOrders.insert(clientOrders.shape[1], 'VWAP', VWAPs)
-                    slipageByVWAPs = clientOrders.pop('slipageByVWAP')
-                    clientOrders.insert(clientOrders.shape[1], 'slipageByVWAP', slipageByVWAPs)
-
-                    # 1.计算twap
-                    clientOrders['TWAP'] = clientOrders.apply(
-                        lambda x: cal_twap(tradingDay, x['effectiveTime'], x['expireTime'], x['symbol'], x['avgPrice'],
-                                           x['side'], x['cumQty']), axis=1)
-
-                    # 2.计算slipageByTwap
-                    clientOrders['slipageByTWAP'] = clientOrders.apply(
-                        lambda x: cal_twap_slipage(x['TWAP'], x['side'], x['avgPrice']), axis=1)
-                    clientOrders.loc[clientOrders.loc[:, 'cumQty'] == 0, ['slipageByTWAP']] = 0.00
-                    clientOrders['TWAP'] = round(clientOrders['TWAP'], 5)
-                    clientOrders['slipageByTWAP'] = round(clientOrders['slipageByTWAP'] * 10000, 2)
-
-                    # 3.计算OrderClosePx
-                    clientOrders['OCP'] = clientOrders.apply(
-                        lambda x: cal_ocp(tradingDay, x['expireTime'], x['symbol'], x['cumQty']), axis=1)
-                    clientOrders['slipageByOCP'] = clientOrders.apply(
-                        lambda x: cal_ocp_slipage(x['OCP'], x['side'], x['avgPrice']), axis=1)
-                    clientOrders['slipageByOCP'] = round(clientOrders['slipageByOCP'] * 10000, 2)
-
-                    df_exchange_order = self.get_exchangeOrder(tradingday=tradingDay, id_type=id_type, id=id)
-
-                    buy_amt, buy_vwap_slipage, buy_pnl_vwap_yuan = self.stat_summary(clientOrders, 'Buy', 'VWAP')
-                    buy_amt, buy_twap_slipage, buy_pnl_twap_yuan = self.stat_summary(clientOrders, 'Buy', 'TWAP')
-                    buy_amt, buy_ocp_slipage, buy_pnl_ocp_yuan = self.stat_summary(clientOrders, 'Buy', 'OCP')
-
-                    sell_amt, sell_vwap_slipage, sell_pnl_vwap_yuan = self.stat_summary(clientOrders, 'Sell', 'VWAP')
-                    sell_amt, sell_twap_slipage, sell_pnl_twap_yuan = self.stat_summary(clientOrders, 'Sell', 'TWAP')
-                    sell_amt, sell_ocp_slipage, sell_pnl_ocp_yuan = self.stat_summary(clientOrders, 'Sell', 'OCP')
-
-                    df_summary = pd.DataFrame(
-                        {'Side': ['Buy', 'Sell'],
-                         'FilledAmt(万元)': [round(buy_amt / 10000, 3), round(sell_amt / 10000, 3)],
-                         'PnL2VWAP(BPS)': [round(buy_vwap_slipage * 10000, 2),
-                                           round(sell_vwap_slipage * 10000, 2)],
-                         'PnL2TWAP(BPS)': [round(buy_twap_slipage * 10000, 2),
-                                           round(sell_twap_slipage * 10000, 2)],
-                         'PnL2OCP(BPS)': [round(buy_ocp_slipage * 10000, 2),
-                                          round(sell_ocp_slipage * 10000, 2)],
-                         'PnL2VWAP(YUAN)': [round(buy_pnl_vwap_yuan, 2),
-                                            round(sell_pnl_vwap_yuan, 2)],
-                         'PnL2TWAP(YUAN)': [round(buy_pnl_twap_yuan, 2),
-                                            round(sell_pnl_twap_yuan, 2)],
-                         'PnL2OCP(YUAN)': [round(buy_pnl_ocp_yuan, 2),
-                                           round(sell_pnl_ocp_yuan, 2)]
-                         }, index=[1, 2])
-
                     df_receive = self.get_receiveList(id_type=id_type, id=id)
                     df_receive['tradingDay'] = tradingDay
-
-                    self.email.add_email_content(f'ClientOrderReporter_{tradingDay}_({id})交易报告，请查收')
+                    self.logger.info(f'start calculator: {tradingDay}__{id_type}__{id}')
                     fileName = f'OrderReporter_{tradingDay}_({id}).xlsx'
-                    pathCsv = os.path.join(f'Data/{fileName}')
+                    pathCsv = os.path.join(f'Data/OrderReporter/{tradingDay}/{fileName}')
 
-                    ExcelHelper.createExcel(pathCsv)
-                    clientOrders['effectiveTime'] = clientOrders['effectiveTime'].map(lambda x: x.strftime('%H:%M:%S'))
-                    clientOrders['expireTime'] = clientOrders['expireTime'].map(lambda x: x.strftime('%H:%M:%S'))
-                    ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=df_summary, header=True,
-                                                   sheet_name='algoSummary', sep_key='all_name')
-                    ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=clientOrders,
-                                                   header=True, sheet_name='algoClientOrder', sep_key='all_name')
-                    ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=df_exchange_order,
-                                                   header=True, sheet_name='algoExchangeOrder', sep_key='all_name')
-                    ExcelHelper.removeSheet(pathCsv, 'Sheet')
+                    isSuccess = cal_client_exchange_summary(tradingDay, id_type, id)
+                    if isSuccess:
+                        self.email.add_email_content(f'ClientOrderReporter_{tradingDay}_({id})交易报告，请查收')
+                        self.email.send_email_file(pathCsv, fileName, df_receive, id, subject_prefix='OrderReporter')
+                        self.email.content = ''
+                        self.logger.info(f'calculator: {tradingDay}__{id} successfully')
 
-                    self.email.send_email_file(pathCsv, fileName, df_receive,id, subject_prefix='OrderReporter')
-                    self.email.content = ''
-                    self.logger.info(f'calculator: {tradingDay}__{id} successfully')
+        for id_type, zip_ids_dict in one_2_mul_id.items():
+            for email_key, zip_ids in zip_ids_dict.items():
+                if len(zip_ids) == 0:
+                    continue
+                df_receive = self.get_receiveList(id_type=id_type, id=email_key)
+                df_receive['tradingDay'] = tradingDay
+                self.email.add_email_content(f'ClientOrderReporter_{tradingDay}_({email_key})交易报告，请查收')
+                dir_csv = os.path.join(dir_data, f'{email_key}')
+                if not os.path.exists(dir_csv):
+                    os.makedirs(dir_csv)
+                for id in zip_ids:
+                    self.logger.info(f'start calculator: {tradingDay}__{id_type}__{id}')
+                    fileName = f'OrderReporter_{tradingDay}_({id}).xlsx'
+                    pathCsv = os.path.join(dir_csv, fileName)
+                    cal_client_exchange_summary(tradingDay, id_type, id)
+                  
+                self.compress_file(dir_csv, f'{email_key}.zip')
+                zip_file = os.path.join(dir_csv, f'{email_key}.zip')
+                self.email.send_email_zip(zip_file, f'{email_key}.zip', df_receive, subject_prefix='OrderReporter')
+                self.email.content = ''
+                self.logger.info(f'send_email_file: {tradingDay}__{email_key} successfully')
 
 
 if __name__ == '__main__':
-    cfg = RawConfigParser()
-    cfg.read('config.ini', encoding='utf-8')
-    clientIds = cfg.get('OrderReporter', 'clientId')
-    accountIds = cfg.get('OrderReporter', 'accountId')
     start = sys.argv[1]
     end = sys.argv[2]
-    reporter = OrderReporter(start, end, clientIds, accountIds)
+    reporter = OrderReporter(start, end)
