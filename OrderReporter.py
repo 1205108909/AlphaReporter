@@ -294,11 +294,10 @@ class OrderReporter(object):
         sendToClients = []
         isZips = []
         zipIds = []
-        zipTypes = []
         isValids = []
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
-                stmt = f"select * from ClientsForPy_copy1"
+                stmt = f"select * from ClientsForPy"
                 self.logger.info(stmt)
                 cursor.execute(stmt)
                 for row in cursor:
@@ -315,12 +314,11 @@ class OrderReporter(object):
                     sendToClients.append(row['sendToClient'])
                     isZips.append(row['isZip'])
                     zipIds.append(row['zipId'])
-                    zipTypes.append(row['zipType'])
                     isValids.append(row['isValid'])
         data = pd.DataFrame(
             {'accountId': accountIds, 'clientId': clientIds, 'sendMode': sendModes, 'clientName': clientNames,
              'to_receiver': emails, 'cc_receiver': repsentEmails, 'reportFrequency': reportFrequencys,
-             'sendToClient': sendToClients, 'isZip': isZips, 'zipId': zipIds, 'zipType': zipTypes, 'isValid': isValids
+             'sendToClient': sendToClients, 'isZip': isZips, 'zipId': zipIds, 'isValid': isValids
              })
         return data
 
