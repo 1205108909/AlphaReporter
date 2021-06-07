@@ -9,7 +9,6 @@ import pandas as pd
 import pymssql
 
 import Log
-from Constants import OrderReportID
 from DataSender.EmailHelper import EmailHelper
 from DataSender.ExcelHelper import ExcelHelper
 from DataService.JYDataLoader import JYDataLoader
@@ -30,7 +29,7 @@ class SendMode(Enum):
 
 
 class OrderReporter(object):
-    def __init__(self, start, end):
+    def __init__(self, start, end, mode):
         self.logger = Log.get_logger(__name__)
         self.tick_path = "Y:/Data/h5data/stock/tick/"
         self.server = "172.10.10.7"
@@ -38,6 +37,7 @@ class OrderReporter(object):
         self.user = "algodb"
         self.password = "!AlGoTeAm_"
         self.conn = None
+        self.mode = mode
 
         jyloader = JYDataLoader()
         tradingdays = jyloader.get_tradingday(start, end)
@@ -51,34 +51,6 @@ class OrderReporter(object):
             return self.conn
         except pymssql.OperationalError as e:
             print(e)
-
-    # def get_receiveList(self, id_type, id):
-    #     if id == '':
-    #         return pd.DataFrame()
-    #     accountIds = []
-    #     clientIds = []
-    #     clientName = []
-    #     to_receiver = []
-    #     cc_receiver = []
-    #     id = id + '%'
-    #     with self.get_connection() as conn:
-    #         with conn.cursor(as_dict=True) as cursor:
-    #             if id_type == IdType.clientId:
-    #                 stmt = f"select * from ClientsForPy_copy1 where clientId like \'{id}\'"
-    #             else:
-    #                 stmt = f"select * from ClientsForPy_copy1 where accountId like \'{id}\'"
-    #             cursor.execute(stmt)
-    #             for row in cursor:
-    #                 accountIds.append(row['accountId'])
-    #                 clientIds.append(row['clientId'])
-    #                 clientName.append(row['clientName'])
-    #                 to_receiver.append(row['email'])
-    #                 cc_receiver.append(row['repsentEmail'])
-    #
-    #     data = pd.DataFrame(
-    #         {'accountId': accountIds, 'clientId': clientIds, 'clientName': clientName, 'to_receiver': to_receiver,
-    #          'cc_receiver': cc_receiver})
-    #     return data
 
     def get_clientOrder(self, tradingday, send_mode, clientId, accountId):
         """
@@ -290,14 +262,14 @@ class OrderReporter(object):
         clientNames = []
         emails = []
         repsentEmails = []
-        reportFrequencys = []
         sendToClients = []
-        isZips = []
         zipIds = []
-        isValids = []
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
-                stmt = f"select * from ClientsForPy"
+                if self.mode == 'normal':
+                    stmt = f"select * from ClientsForPy"
+                else:
+                    stmt = f"select * from ClientsForPy_fix"
                 self.logger.info(stmt)
                 cursor.execute(stmt)
                 for row in cursor:
@@ -310,16 +282,11 @@ class OrderReporter(object):
                     emails.append(row['email'])
 
                     repsentEmails.append(row['repsentEmail'])
-                    reportFrequencys.append(row['reportFrequency'])
                     sendToClients.append(row['sendToClient'])
-                    isZips.append(row['isZip'])
                     zipIds.append(row['zipId'])
-                    isValids.append(row['isValid'])
         data = pd.DataFrame(
             {'accountId': accountIds, 'clientId': clientIds, 'sendMode': sendModes, 'clientName': clientNames,
-             'to_receiver': emails, 'cc_receiver': repsentEmails, 'reportFrequency': reportFrequencys,
-             'sendToClient': sendToClients, 'isZip': isZips, 'zipId': zipIds, 'isValid': isValids
-             })
+             'to_receiver': emails, 'cc_receiver': repsentEmails, 'sendToClient': sendToClients, 'zipId': zipIds})
         return data
 
     def run(self, tradingDays):
@@ -495,59 +462,6 @@ class OrderReporter(object):
             main_cal(df_only_clientId, ['clientId'], SendMode.clientId)
             main_cal(df_only_accountId, ['accountId'], SendMode.accountId)
             main_cal(df_clientId_accountId, ['clientId', 'accountId'], SendMode.clientId_accountId)
-            # df_only_clientId.drop_duplicates(subset=['clientId'], keep='first', inplace=True)
-            # for index, row in df_only_clientId.iterrows():
-            #     clientId = row['clientId']
-            #     clientName = row['clientName']
-            #     self.logger.info(f'start calculator: {tradingDay}__clientId__{clientId}')
-            #     fileName = f'OrderReporter_{tradingDay}_({clientId}).xlsx'
-            #     pathCsv = os.path.join(f'Data/OrderReporter/{tradingDay}/{fileName}')
-            #
-            #     isSuccess = cal_client_exchange_summary(tradingDay, SendMode.clientId, clientId=clientId)
-            #     if isSuccess:
-            #         self.email.add_email_content(f'ClientOrderReporter_{tradingDay}_({clientId})交易报告，请查收')
-            #         subject = f'OrderReporter:{clientName}({clientId})_{tradingDay}'
-            #         self.email.send_email_file(pathCsv, fileName, to_receiver=row['to_receiver'].split(';'),
-            #                                    cc_receiver=row['cc_receiver'].split(';'), subject=subject)
-            #         self.email.content = ''
-            #         self.logger.info(f'calculator: {tradingDay}__{clientId} successfully')
-            #
-            # df_only_accountId.drop_duplicates(subset=['accountId'], keep='first', inplace=True)
-            # for index, row in df_only_accountId.iterrows():
-            #     accountId = row['accountId']
-            #     clientName = row['clientName']
-            #     self.logger.info(f'start calculator: {tradingDay}__accountId__{accountId}')
-            #     fileName = f'OrderReporter_{tradingDay}_({accountId}).xlsx'
-            #     pathCsv = os.path.join(f'Data/OrderReporter/{tradingDay}/{fileName}')
-            #
-            #     isSuccess = cal_client_exchange_summary(tradingDay, SendMode.accountId, accountId=accountId)
-            #     if isSuccess:
-            #         self.email.add_email_content(f'ClientOrderReporter_{tradingDay}_({accountId})交易报告，请查收')
-            #         subject = f'OrderReporter:{clientName}({accountId})_{tradingDay}'
-            #         self.email.send_email_file(pathCsv, fileName, to_receiver=row['to_receiver'].split(';'),
-            #                                    cc_receiver=row['cc_receiver'].split(';'), subject=subject)
-            #         self.email.content = ''
-            #         self.logger.info(f'calculator: {tradingDay}__{accountId} successfully')
-            #
-            # df_clientId_accountId.drop_duplicates(subset=['clientId', 'accountId'], keep='first', inplace=True)
-            # for index, row in df_clientId_accountId.iterrows():
-            #     row_clientId = row['clientId']
-            #     row_accountId = row['accountId']
-            #     clientName = row['clientName']
-            #     self.logger.info(
-            #         f'start calculator: {tradingDay}__clientId[{row_clientId}]__accountId[{row_accountId}]')
-            #     fileName = f'OrderReporter_{tradingDay}_({row_accountId}).xlsx'
-            #     pathCsv = os.path.join(f'Data/OrderReporter/{tradingDay}/{fileName}')
-            #
-            #     isSuccess = cal_client_exchange_summary(tradingDay, SendMode.clientId_accountId, clientId=row_clientId,
-            #                                             accountId=row_accountId)
-            #     if isSuccess:
-            #         self.email.add_email_content(f'ClientOrderReporter_{tradingDay}_({row_accountId})交易报告，请查收')
-            #         subject = f'OrderReporter:{clientName}({row_accountId})_{tradingDay}'
-            #         self.email.send_email_file(pathCsv, fileName, to_receiver=row['to_receiver'].split(';'),
-            #                                    cc_receiver=row['cc_receiver'].split(';'), subject=subject)
-            #         self.email.content = ''
-            #         self.logger.info(f'calculator: {tradingDay}__{row_accountId} successfully')
 
             set_zipIds = set(df_zip_clientId['zipId'])
             for zipid in set_zipIds:
@@ -583,4 +497,8 @@ class OrderReporter(object):
 if __name__ == '__main__':
     start = sys.argv[1]
     end = sys.argv[2]
-    reporter = OrderReporter(start, end)
+    if len(sys.argv) > 3:
+        mode = sys.argv[3]
+    else:
+        mode = 'normal'
+    reporter = OrderReporter(start, end, mode)
