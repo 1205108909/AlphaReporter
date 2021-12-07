@@ -70,3 +70,8 @@ class ExcelHelper(object):
         ws = wb[sheetName]
         wb.remove(ws)
         wb.save(path)
+
+    @classmethod
+    def isNullExcel(cls, path):
+        wb = openpyxl.load_workbook(path)
+        return len(wb.get_sheet_names()) == 1

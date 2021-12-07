@@ -11,9 +11,7 @@
 import pymssql
 import numpy as np
 import pandas as pd
-import time
 from datetime import datetime
-import multiprocessing
 import threading
 
 # 显示所有列
