@@ -78,13 +78,18 @@ class AlgoTradeReporter(object):
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
                 if send_mode == SendMode.clientId:
-                    stmt = f"select * from ClientOrderView where orderQty>0 and securityType='{securityType}'  and tradingDay = \'{tradingday}\' and clientId like \'{clientId}\' AND algo <> 'POV' AND algo <> 'PEGGING'"
+                    if clientId is None:
+                        stmt = f"select * from ClientOrderView where orderQty>0 and securityType='{securityType}'  and tradingDay = \'{tradingday}\' AND algo <> 'POV' AND algo <> 'PEGGING'"
+                    else:
+                        stmt = f"select * from ClientOrderView where orderQty>0 and securityType='{securityType}'  and tradingDay = \'{tradingday}\' and clientId like \'{clientId}\' AND algo <> 'POV' AND algo <> 'PEGGING'"
                 elif send_mode == SendMode.accountId:
-                    stmt = f"select * from ClientOrderView where orderQty>0 and securityType='{securityType}' and tradingDay = \'{tradingday}\' and accountId like \'{accountId}\' AND algo <> 'POV' AND algo <> 'PEGGING'"
+                    if accountId is None:
+                        stmt = f"select * from ClientOrderView where orderQty>0 and securityType='{securityType}'  and tradingDay = \'{tradingday}\' AND algo <> 'POV' AND algo <> 'PEGGING'"
+                    else:
+                        stmt = f"select * from ClientOrderView where orderQty>0 and securityType='{securityType}' and tradingDay = \'{tradingday}\' and accountId like \'{accountId}\' AND algo <> 'POV' AND algo <> 'PEGGING'"
                 elif send_mode == SendMode.clientId_accountId:
                     stmt = f"select * from ClientOrderView where orderQty>0 and securityType='{securityType}' and tradingDay = \'{tradingday}\' and clientId like \'{clientId}\' and accountId like \'{accountId}\' AND algo <> 'POV' AND algo <> 'PEGGING'"
                 self.logger.info(stmt)
-                print(stmt)
                 cursor.execute(stmt)
                 for row in cursor:
                     orderId.append(row['orderId'])
@@ -138,7 +143,6 @@ class AlgoTradeReporter(object):
                 elif send_mode == SendMode.clientId_accountId:
                     stmt = f"SELECT a.sliceId, a.orderId, b.side,b.symbol,a.effectiveTime,a.qty,a.cumQty,a.leavesQty,a.price,a.sliceAvgPrice,a.orderStatus from ExchangeOrderView a join ClientOrderView b on a.orderId=b.orderId where a.orderStatus in ('Filled','Canceled') AND b.tradingDay = \'{tradingday}\' AND b.clientId like \'{clientId}\' AND b.accountId like \'{accountId}\' AND b.algo <> 'POV' AND b.algo <> 'PEGGING' AND  b.securityType=\'{securityType}\'"
                 self.logger.info(stmt)
-                print(stmt)
                 cursor.execute(stmt)
                 for row in cursor:
                     sliceId.append(row['sliceId'])
@@ -176,7 +180,6 @@ class AlgoTradeReporter(object):
             with conn.cursor(as_dict=True) as cursor:
                 stmt = f"select accountId, clientId,sendMode,clientName,email,repsentEmail,sendToClient from ClientsForPyLocal"
                 self.logger.info(stmt)
-                print(stmt)
                 cursor.execute(stmt)
                 for row in cursor:
                     if row['sendToClient'] == 'N':
@@ -220,7 +223,6 @@ class AlgoTradeReporter(object):
             elif send_mode == SendMode.clientId_accountId:
                 mainId = accountId
             self.logger.info(f'start calculator: {tradingDay}__{mainId}')
-            print(f'start calculator: {tradingDay}__{mainId}')
 
             fileName = f'AlgoTradeReporter_{tradingDay}_({mainId}).xlsx'
             pathCsv = os.path.join(self.dir_data, fileName)
@@ -234,7 +236,6 @@ class AlgoTradeReporter(object):
                     emptyOrderInfo = f"{tradingDay} clientId:{clientId} accountId:{accountId} security_type:{security_type} " \
                                f"sendMode:{send_mode} has not clientOrder"
                     self.logger.info(emptyOrderInfo)
-                    print(emptyOrderInfo)
                     continue
 
                 df_exchange_order = self.get_exchangeOrder(tradingday=tradingDay, send_mode=send_mode,
@@ -251,11 +252,11 @@ class AlgoTradeReporter(object):
                 df_summary = pd.DataFrame(
                     {"撤单率": f"{round(cancelRatio * 100, 2)}%", "母单个数": clientOrderCount,
                      "成交额(万元)": round(sumAmt / 10000, 2), "成交额加权滑点差(bps)": bps}, index=[1])
-                ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=df_clientOrder, header=True,
+                ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=df_summary, header=True,
                                                sheet_name=security_type,
                                                sep_key='all_name')
 
-                ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=df_summary, header=True,
+                ExcelHelper.Append_df_to_excel(file_name=pathCsv, df=df_clientOrder, header=True,
                                                interval=3, sheet_name=security_type, sep_key='all_name')
             if not ExcelHelper.isNullExcel(pathCsv):
                 ExcelHelper.removeSheet(pathCsv, 'Sheet')
