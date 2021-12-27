@@ -106,28 +106,28 @@ class OrderReporter(object):
         data['turnover'] = data['avgPrice'] * data['cumQty']
         return data
 
-    def get_client_order_count(self, tradingday, send_mode, clientId, accountId):
+    def get_client_order_qty(self, tradingday, send_mode, clientId, accountId):
         orderId = []
         sliceStatus = []
-        sliceCount = []
+        qtys = []
 
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
                 if send_mode == SendMode.clientId:
-                    stmt = f"SELECT a.orderId, sliceStatus, sliceCount FROM ClientOrderView a JOIN (SELECT orderId,orderStatus AS sliceStatus,COUNT (*) AS sliceCount FROM ExchangeOrderView WHERE orderStatus IN ('Filled', 'Canceled') GROUP BY orderId,orderStatus) b ON a.orderId = b.orderId WHERE a.tradingDay = \'{tradingday}\' AND a.clientId like \'{clientId}\' AND a.algo <> 'POV' AND a.algo <> 'PEGGING'  ORDER BY a.orderId"
+                    stmt = f"SELECT a.orderId, sliceStatus, qty FROM ClientOrderView a JOIN (SELECT orderId,orderStatus AS sliceStatus,Sum (qty) AS qty FROM ExchangeOrderView WHERE orderStatus IN ('Filled', 'Canceled') GROUP BY orderId,orderStatus) b ON a.orderId = b.orderId WHERE a.tradingDay = \'{tradingday}\' AND a.clientId like \'{clientId}\' AND a.algo <> 'POV' AND a.algo <> 'PEGGING'  ORDER BY a.orderId"
                 elif send_mode == SendMode.accountId:
-                    stmt = f"SELECT a.orderId, sliceStatus, sliceCount FROM ClientOrderView a JOIN (SELECT orderId,orderStatus AS sliceStatus,COUNT (*) AS sliceCount FROM ExchangeOrderView WHERE orderStatus IN ('Filled', 'Canceled') GROUP BY orderId,orderStatus) b ON a.orderId = b.orderId WHERE a.tradingDay = \'{tradingday}\' AND a.algo <> 'POV' AND a.algo <> 'PEGGING'  AND a.accountId like \'{accountId}\' ORDER BY a.orderId"
+                    stmt = f"SELECT a.orderId, sliceStatus, qty FROM ClientOrderView a JOIN (SELECT orderId,orderStatus AS sliceStatus,Sum (qty) AS qty FROM ExchangeOrderView WHERE orderStatus IN ('Filled', 'Canceled') GROUP BY orderId,orderStatus) b ON a.orderId = b.orderId WHERE a.tradingDay = \'{tradingday}\' AND a.algo <> 'POV' AND a.algo <> 'PEGGING'  AND a.accountId like \'{accountId}\' ORDER BY a.orderId"
                 elif send_mode == SendMode.clientId_accountId:
-                    stmt = f"SELECT a.orderId, sliceStatus, sliceCount FROM ClientOrderView a JOIN (SELECT orderId,orderStatus AS sliceStatus,COUNT (*) AS sliceCount FROM ExchangeOrderView WHERE orderStatus IN ('Filled', 'Canceled') GROUP BY orderId,orderStatus) b ON a.orderId = b.orderId WHERE a.tradingDay = \'{tradingday}\' AND a.algo <> 'POV' AND a.algo <> 'PEGGING'  AND a.clientId like \'{clientId}\' AND a.accountId like \'{accountId}\' ORDER BY a.orderId"
+                    stmt = f"SELECT a.orderId, sliceStatus, qty FROM ClientOrderView a JOIN (SELECT orderId,orderStatus AS sliceStatus,Sum (qty) AS qty FROM ExchangeOrderView WHERE orderStatus IN ('Filled', 'Canceled') GROUP BY orderId,orderStatus) b ON a.orderId = b.orderId WHERE a.tradingDay = \'{tradingday}\' AND a.algo <> 'POV' AND a.algo <> 'PEGGING'  AND a.clientId like \'{clientId}\' AND a.accountId like \'{accountId}\' ORDER BY a.orderId"
                 self.logger.info(stmt)
                 cursor.execute(stmt)
                 for row in cursor:
                     orderId.append(row['orderId'])
                     sliceStatus.append(row['sliceStatus'])
-                    sliceCount.append(row['sliceCount'])
+                    qtys.append(row['qty'])
 
-        data = pd.DataFrame({'orderId': orderId, 'sliceStatus': sliceStatus, 'sliceCount': sliceCount})
-        data['sliceCount'] = data['sliceCount'].astype('int')
+        data = pd.DataFrame({'orderId': orderId, 'sliceStatus': sliceStatus, 'qty': qtys})
+        data['qty'] = data['qty'].astype('int')
         return data
 
     def get_exchangeOrder(self, tradingday, send_mode, clientId, accountId):
@@ -353,11 +353,11 @@ class OrderReporter(object):
             df_client_order = self.get_clientOrder(tradingDay, send_mode, clientId, accountId)
             if len(df_client_order) == 0:
                 return False
-            df_client_order_count = self.get_client_order_count(tradingDay, send_mode, clientId, accountId)
-            df_client_order_count['sliceStatus'] = df_client_order_count['sliceStatus'].map(
-                lambda x: x + 'Count')
-            df_client_order_count = df_client_order_count.pivot(index='orderId', columns='sliceStatus',
-                                                                values='sliceCount')
+            df_client_order_qty = self.get_client_order_qty(tradingDay, send_mode, clientId, accountId)
+            df_client_order_qty['sliceStatus'] = df_client_order_qty['sliceStatus'].map(
+                lambda x: x + 'Qty')
+            df_client_order_count = df_client_order_qty.pivot(index='orderId', columns='sliceStatus',
+                                                                values='qty')
             df_client_order = df_client_order.merge(df_client_order_count, how='left', left_on='orderId',
                                                     right_index=True)
             df_client_order.fillna(0, inplace=True)

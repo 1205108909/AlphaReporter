@@ -78,12 +78,12 @@ class AlgoTradeReporter(object):
         with self.get_connection() as conn:
             with conn.cursor(as_dict=True) as cursor:
                 if send_mode == SendMode.clientId:
-                    if clientId is None:
+                    if clientId == "Null":
                         stmt = f"select * from ClientOrderView where orderQty>0 and securityType='{securityType}'  and tradingDay = \'{tradingday}\' AND algo <> 'POV' AND algo <> 'PEGGING'"
                     else:
                         stmt = f"select * from ClientOrderView where orderQty>0 and securityType='{securityType}'  and tradingDay = \'{tradingday}\' and clientId like \'{clientId}\' AND algo <> 'POV' AND algo <> 'PEGGING'"
                 elif send_mode == SendMode.accountId:
-                    if accountId is None:
+                    if accountId == "Null":
                         stmt = f"select * from ClientOrderView where orderQty>0 and securityType='{securityType}'  and tradingDay = \'{tradingday}\' AND algo <> 'POV' AND algo <> 'PEGGING'"
                     else:
                         stmt = f"select * from ClientOrderView where orderQty>0 and securityType='{securityType}' and tradingDay = \'{tradingday}\' and accountId like \'{accountId}\' AND algo <> 'POV' AND algo <> 'PEGGING'"
